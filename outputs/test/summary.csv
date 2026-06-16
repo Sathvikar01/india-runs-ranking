@@ -1,0 +1,2 @@
+ablation,ndcg@5,p@5,ndcg@10,p@10,ndcg@50,p@50,ndcg@100,p@100,map,mrr,composite
+proxy,1.0,0.4,1.0,0.2,1.0,0.04,1.0,0.02,1.0,1.0,0.9600000000000001

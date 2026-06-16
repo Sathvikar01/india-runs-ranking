@@ -21,8 +21,8 @@ team_members:
 # ============================================================================
 # Code and reproducibility
 # ============================================================================
-github_repo: "https://github.com/arsat/india-runs-ranking"
-sandbox_link: "https://huggingface.co/spaces/arsat/redrob-ranker"
+github_repo: "https://github.com/Sathvikar01/india-runs-ranking"
+sandbox_link: "https://huggingface.co/spaces/Sathvikar01/redrob-ranker"
 
 # ============================================================================
 # Compute environment

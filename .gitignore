@@ -36,12 +36,17 @@ data/processed/*
 artifacts/embeddings.npz
 artifacts/faiss.index
 artifacts/faiss_*.index
+artifacts/faiss.ids.pkl
 artifacts/career_embeddings.npz
 artifacts/portraits.jsonl
-artifacts/ltr_*.cbm
+artifacts/ltr*.cbm
+artifacts/ltr*.cv.json
 artifacts/*.bin
 artifacts/*.pt
 artifacts/*.safetensors
+artifacts/*.parquet
+artifacts/*.pkl
+artifacts/bm25.pkl
 artifacts/models/
 artifacts/cache/
 
