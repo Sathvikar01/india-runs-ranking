@@ -1,0 +1,14 @@
+sandbox:
+  title: "Redrob Candidate Intelligence — Sandbox"
+  description: "Upload up to 100 candidates (JSON) and the JD text. Get a ranked CSV with per-candidate reasoning."
+  max_candidates: 100
+  max_jd_chars: 12000
+  default_output_name: "sandbox_ranking.csv"
+  show_top_k: 100
+  rationale_panel:
+    enabled: true
+    max_examples: 5
+  ui_theme: "light"
+  server:
+    port: 8501
+    address: 0.0.0.0

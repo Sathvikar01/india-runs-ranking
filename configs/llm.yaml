@@ -1,0 +1,24 @@
+llm:
+  base_url: https://api.zenmux.ai/v1
+  api_key_env: ZENMUX_API_KEY
+  model: xiaomi/mimo-v2-5
+  max_tokens: 160
+  temperature: 0.2
+  top_p: 0.95
+  timeout_s: 60
+  max_retries: 3
+  retry_backoff_s: 2.0
+  batch_size: 16
+  max_concurrent: 8
+  prompts_file: configs/reasoning_prompts.yaml
+  grounding_rules:
+    - "Every named employer must appear in the candidate's career_history."
+    - "Every named skill must appear in the candidate's skills list or career descriptions."
+    - "Years-of-experience, current_title, and notice_period figures must match the profile exactly."
+    - "If you are unsure, omit the claim. Do not invent."
+  style_rules:
+    - "Length: 1-2 sentences, 25-50 words."
+    - "Tone: matter-of-fact recruiter note, not marketing copy."
+    - "Lead with the strongest positive signal or the strongest negative signal."
+    - "Mention the most JD-relevant evidence: AI/ML career work, retrieval/ranking, fine-tuning, open-source."
+    - "Acknowledge the obvious gap if there is one."

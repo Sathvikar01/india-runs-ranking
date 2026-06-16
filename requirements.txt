@@ -1,0 +1,24 @@
+# Pinned runtime dependencies for the ranking step (sandbox-reproducible).
+# Versions selected to be reproducible on a 16 GB CPU-only sandbox.
+
+numpy>=1.26,<3.0
+pandas>=2.2,<3.0
+pyarrow>=15.0
+pyyaml>=6.0
+jsonschema>=4.21
+python-dateutil>=2.8
+
+scikit-learn>=1.4
+lightgbm>=4.3
+rank-bm25>=0.2.2
+
+sentence-transformers>=2.6
+faiss-cpu>=1.8.0
+torch>=2.1
+transformers>=4.40
+
+openai>=1.30
+streamlit>=1.35
+pydantic>=2.6
+mlflow>=2.12
+structlog>=24.1

@@ -1,0 +1,33 @@
+ranking:
+  top_k_final: 100
+  score_min: 0.0
+  score_max: 1.0
+  score_jitter: 0.0001  # ensure strict monotonicity (rank 1 > rank 2 > ... > rank 100)
+  tie_break: candidate_id_asc
+
+ltr:
+  algorithm: lambdarank
+  objective: lambdarank
+  metric: ndcg
+  ndcg_eval_at: [10, 50, 100]
+  num_leaves: 63
+  learning_rate: 0.05
+  num_iterations: 600
+  early_stopping_rounds: 50
+  feature_fraction: 0.9
+  bagging_fraction: 0.9
+  bagging_freq: 5
+  min_data_in_leaf: 20
+  lambda_position_bias: true
+  num_folds: 5
+
+features:
+  include_groups:
+    - retrieval
+    - cross_encoder
+    - behavioral
+    - honeypot
+    - jd_match
+    - career
+    - skills
+    - education

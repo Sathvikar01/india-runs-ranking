@@ -1,0 +1,63 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: |
+          pip install -e ".[dev]" --no-deps || true
+          pip install pytest pytest-cov pytest-mock lightgbm "numpy>=1.26,<3.0" "pandas>=2.2,<3.0" pyarrow pydantic pyyaml jsonschema python-dateutil scikit-learn openai structlog mlflow rank-bm25
+      - name: Run unit tests
+        run: pytest tests/unit -q --no-cov
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: |
+          pip install -e ".[dev]" --no-deps || true
+          pip install pytest pytest-cov pytest-mock lightgbm "numpy>=1.26,<3.0" "pandas>=2.2,<3.0" pyarrow pydantic pyyaml jsonschema python-dateutil scikit-learn openai structlog mlflow rank-bm25
+      - name: Run integration tests
+        run: pytest tests/integration -q --no-cov -m "not slow"
+
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [unit, integration]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: |
+          pip install -e ".[dev]" --no-deps || true
+          pip install pytest pytest-cov pytest-mock lightgbm "numpy>=1.26,<3.0" "pandas>=2.2,<3.0" pyarrow pydantic pyyaml jsonschema python-dateutil scikit-learn openai structlog mlflow rank-bm25
+      - name: Coverage
+        run: pytest -q --cov-fail-under=85
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml

@@ -1,0 +1,43 @@
+build:
+  candidates_path: data/raw/candidates.jsonl
+  job_description_path: data/raw/job_description.md
+  out_dir: artifacts
+  sample_size_for_smoke: 100
+  dev_split_size: 5000
+  random_seed: 42
+  mlflow_tracking_uri: null  # set to "./mlruns" to enable local tracking
+
+embedding:
+  model_name: BAAI/bge-small-en-v1.5
+  dim: 384
+  batch_size: 128
+  max_seq_length: 256
+  quantize: int8
+  normalize: true
+  device: cpu
+  cache_dir: artifacts/cache/hf
+
+bm25:
+  k1: 1.5
+  b: 0.75
+  lowercase: true
+  token_pattern: "(?u)\\b\\w[a-zA-Z0-9+#.-]{1,}\\b"
+
+cross_encoder:
+  model_name: cross-encoder/ms-marco-MiniLM-L-6-v2
+  top_k_from_retrieval: 500
+  top_k_output: 200
+  max_length: 256
+  batch_size: 64
+  device: cpu
+
+retrieval:
+  rrf_k: 60
+  dense_top_k: 500
+  bm25_top_k: 500
+  union_top_k: 500
+  faiss_index_type: HNSW
+  faiss_hnsw_M: 32
+  faiss_ef_construction: 200
+  faiss_ef_search: 64
+  faiss_use_cosine: true

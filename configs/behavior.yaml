@@ -1,0 +1,44 @@
+behavioral:
+  availability:
+    weight_open_to_work: 0.10
+    weight_recent_activity: 0.20
+    weight_response_rate: 0.20
+    weight_notice_period: 0.20
+    weight_willing_to_relocate: 0.05
+    weight_verifications: 0.10
+    weight_interview_completion: 0.10
+    weight_offer_acceptance: 0.05
+    recent_activity_window_days: 30
+    stale_activity_threshold_days: 180
+
+  honeypot:
+    rule_weights:
+      skill_proficiency_vs_duration: 0.20
+      yoe_vs_career_sum: 0.20
+      perfect_skill_list_with_non_tech_title: 0.25
+      multiple_current_positions: 0.10
+      expert_in_too_many_skills: 0.10
+      all_skills_zero_endorsements: 0.05
+      high_skill_count_no_career_evidence: 0.10
+    risk_threshold: 0.60
+
+  jd_filters:
+    reject_if:
+      - { rule: only_consulting_companies, weight: 0.20 }
+      - { rule: only_cv_robotics_speech, weight: 0.15 }
+      - { rule: title_chaser_avg_tenure_lt_18mo, weight: 0.15 }
+      - { rule: closed_source_only, weight: 0.10 }
+      - { rule: langchain_recent_only, weight: 0.10 }
+      - { rule: no_nlp_ir_in_career, weight: 0.20 }
+      - { rule: yoe_lt_3_or_gt_15, weight: 0.05 }
+
+  preference:
+    prefer_if:
+      - { rule: has_ai_career_evidence, weight: 0.25 }
+      - { rule: shipped_ranking_or_search_at_scale, weight: 0.25 }
+      - { rule: tier_1_or_2_education, weight: 0.05 }
+      - { rule: location_noida_pune_or_relocate, weight: 0.15 }
+      - { rule: github_open_source_evidence, weight: 0.10 }
+      - { rule: hybrid_or_onsite_preferred, weight: 0.05 }
+      - { rule: notice_period_lt_30d, weight: 0.10 }
+      - { rule: profile_active_30d, weight: 0.05 }

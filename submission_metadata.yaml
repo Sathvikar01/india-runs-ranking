@@ -1,0 +1,71 @@
+# Redrob Hackathon — Submission Metadata
+#
+# Mirrors the portal metadata. Stage 3 review uses this file to verify your
+# portal metadata.
+
+# ============================================================================
+# Team identity
+# ============================================================================
+team_name: "Candidate Intelligence Platform"
+
+primary_contact:
+  name: "arsat"
+  email: "arsat@example.com"
+  phone: "+91-XXXXXXXXXX"
+
+team_members:
+  - name: "arsat"
+    email: "arsat@example.com"
+    role: "Solo / Full-stack"
+
+# ============================================================================
+# Code and reproducibility
+# ============================================================================
+github_repo: "https://github.com/arsat/india-runs-ranking"
+sandbox_link: "https://huggingface.co/spaces/arsat/redrob-ranker"
+
+# ============================================================================
+# Compute environment
+# ============================================================================
+compute_environment_summary: "Lenovo IdeaPad Slim 5i (13th Gen Intel i7-1355U, 16 GB RAM), Python 3.11.9, no GPU"
+
+# ============================================================================
+# Methodology summary (≤ 200 words)
+# ============================================================================
+methodology_summary: |
+  Trap-aware hybrid retrieval + LTR ensemble. Stage 1: BM25 (rank_bm25) over
+  a per-candidate `deep_profile` text that weights career-history evidence
+  above the skill list (the JD explicitly warns against keyword matching).
+  Stage 2: a small cross-encoder (`ms-marco-MiniLM-L-6-v2`) reranks the
+  hybrid-retrieval shortlist. Stage 3: a LightGBM LambdaRank model
+  trained on JD-derived proxy-relevance labels with bucketing to work
+  around the 10k-row-per-query limit. Stage 4: ensemble of LTR +
+  cross-encoder + behavioral availability + positive JD boosters −
+  negative JD filters − honeypot risk. Strictly monotonic scores in
+  [0.20, 0.99] with per-rank jitter. Reasoning is generated via a
+  feature-driven template at rank time (MiMo v2.5 via Zenmux was used
+  in build but the API was unreachable from the run sandbox; the
+  template fallback explicitly cites the candidate's strongest positive
+  signal and a single honest concern).
+
+# ============================================================================
+# Approach notes
+# ============================================================================
+approach:
+  retrieval: "BM25 + small bi-encoder (optional) + RRF + cross-encoder rerank"
+  ranking: "LightGBM LambdaRank with 60+ engineered features"
+  behavioral_engine: "Vectorized availability score + positive/negative JD filters + honeypot risk"
+  reasoning: "Feature-driven template at rank time; LLM portraits at build time when reachable"
+  honeypot_detection: "Rule ensemble on skill-proficiency vs duration, YOE vs career-sum, perfect skill list with non-tech title, multiple current positions, expert-in-too-many-skills, all-skills-zero-endorsements, high-skill-count-no-career-evidence"
+  artifacts: "bm25.pkl, faiss.index, feature_store.parquet, ltr.cbm (~500 MB total)"
+  ranking_budget: "< 120s on 16 GB CPU; well within the 5-min Stage 3 ceiling"
+
+# ============================================================================
+# Declarations
+# ============================================================================
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true
+  reproduction_tested: true

@@ -1,0 +1,101 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Project data (large)
+data/raw/candidates.jsonl
+data/raw/candidates.jsonl.gz
+data/interim/*
+data/processed/*
+artifacts/embeddings.npz
+artifacts/faiss.index
+artifacts/faiss_*.index
+artifacts/career_embeddings.npz
+artifacts/portraits.jsonl
+artifacts/ltr_*.cbm
+artifacts/*.bin
+artifacts/*.pt
+artifacts/*.safetensors
+artifacts/models/
+artifacts/cache/
+
+# Reports (keep .md but ignore rendered)
+reports/*.html
+reports/*.png
+reports/figures/
+!reports/.gitkeep
+
+# Outputs (submission lives here but we keep only the validated one)
+outputs/*.csv
+!outputs/.gitkeep
+outputs/probes/
+outputs/ablations/
+
+# Logs
+*.log
+logs/
+mlruns/
+wandb/
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+.tox/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Notebooks
+.ipynb_checkpoints/
+profile_default/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+secrets.yaml
+*.pem
+*.key
+api_keys.json
+
+# Local scripts
+local_*.sh
+local_*.py
+tmp_*.py
+debug_*.py

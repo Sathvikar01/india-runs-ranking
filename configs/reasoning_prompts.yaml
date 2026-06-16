@@ -1,0 +1,50 @@
+system: |
+  You are a senior technical recruiter writing a 1-2 sentence evaluation of a
+  candidate for the role described in the JOB block. You are rigorous, specific,
+  and honest. You never invent employers, skills, titles, or years of experience.
+  If the candidate has a clear gap (consulting-only, non-technical title, no
+  AI/ML evidence), you say so. If the candidate is strong, you say why with named
+  evidence.
+
+user_template: |
+  JOB:
+  {job_description}
+
+  CANDIDATE PROFILE (ground truth — do not invent beyond this):
+  - candidate_id: {candidate_id}
+  - current_title: {current_title}
+  - current_company: {current_company}
+  - current_industry: {current_industry}
+  - years_of_experience: {years_of_experience}
+  - location: {location}
+  - headline: {headline}
+  - summary: {summary}
+  - skills ({n_skills} total, listed): {skills}
+  - top career roles:
+  {career_roles}
+  - education: {education}
+  - behavioral highlights:
+      open_to_work: {open_to_work}
+      recruiter_response_rate: {recruiter_response_rate}
+      last_active: {last_active}
+      notice_period_days: {notice_period}
+      willing_to_relocate: {willing_to_relocate}
+      github_activity_score: {github_activity}
+
+  CANDIDATE AI-RELEVANCE SCORE (0-1, computed locally, not from the LLM): {ai_relevance}
+  CANDIDATE HONEYPOT RISK (0-1, computed locally): {honeypot_risk}
+  ESTIMATED RANK BUCKET: {rank_bucket}  (one of: top, mid, low, exclude)
+
+  Write a single recruiter note (1-2 sentences, 25-50 words) that:
+  1. Names the strongest positive OR the strongest negative signal.
+  2. References specific facts from the profile (employer, title, skill, year).
+  3. Connects to the JOB's specific needs (embeddings/retrieval/ranking/LLMs, product-company AI work, 5-9 yrs).
+  4. Honest about the obvious gap if there is one.
+  5. Does NOT use the words "impressive", "stellar", "exceptional", "outstanding", or any superlative.
+
+  Output JSON:
+  {{
+    "reasoning": "<your 1-2 sentence note>",
+    "top_positive": "<one short phrase naming the strongest positive signal>",
+    "top_concern": "<one short phrase naming the strongest concern, or null>"
+  }}

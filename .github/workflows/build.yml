@@ -1,0 +1,82 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install runtime
+        run: |
+          pip install -e . --no-deps || true
+          pip install pytest pytest-cov pytest-mock lightgbm "numpy>=1.26,<3.0" "pandas>=2.2,<3.0" pyarrow pydantic pyyaml jsonschema python-dateutil scikit-learn openai structlog mlflow rank-bm25
+      - name: Run a 100-row smoke build
+        run: |
+          # We don't have a real candidates.jsonl in CI; create a tiny synthetic one.
+          python -c "
+          import json, random
+          from src.api.schemas import Candidate, Profile, CareerRole, Skill, RedrobSignals, Education
+          from src.preprocessing.deep_profile import build_deep_profile
+          random.seed(0)
+          with open('candidates_synth.jsonl','w') as f:
+            for i in range(100):
+              cid = f'CAND_{i:07d}'
+              title = random.choice(['Software Engineer','Marketing Manager','Data Scientist','ML Engineer','Content Writer','HR Manager'])
+              cand = Candidate(
+                candidate_id=cid,
+                profile=Profile(
+                  anonymized_name=f'cand{i}', headline='h', summary='s',
+                  location='Pune, Maharashtra', country='India',
+                  years_of_experience=random.uniform(1,12),
+                  current_title=title, current_company='Acme', current_company_size='201-500', current_industry='Software',
+                ),
+                career_history=[CareerRole(company='Acme', title=title, start_date='2022-01-01', end_date=None, duration_months=36, is_current=True, industry='Software', company_size='201-500', description='Worked on things.')],
+                education=[Education(institution='IIT', degree='B.Tech', field_of_study='CS', tier='tier_1')],
+                skills=[Skill(name='Python', proficiency='advanced', endorsements=10, duration_months=48)],
+                certifications=[], languages=[], projects=[],
+                redrob_signals=RedrobSignals(
+                  profile_completeness_score=80, signup_date='2025-01-01', last_active_date='2026-06-12',
+                  open_to_work_flag=True, profile_views_received_30d=10, applications_submitted_30d=2,
+                  recruiter_response_rate=0.7, avg_response_time_hours=10, skill_assessment_scores={},
+                  connection_count=200, endorsements_received=20, notice_period_days=30,
+                  expected_salary_range_inr_lpa={'min': 20,'max': 30},
+                  preferred_work_mode='hybrid', willing_to_relocate=True,
+                  github_activity_score=20, search_appearance_30d=20,
+                  saved_by_recruiters_30d=2, interview_completion_rate=0.8,
+                  offer_acceptance_rate=0.5, verified_email=True, verified_phone=True, linkedin_connected=True,
+                ),
+              )
+              f.write(cand.model_dump_json() + chr(10))
+          print('wrote candidates_synth.jsonl')
+          "
+      - name: Write a stub JD
+        run: echo "We are looking for a Senior AI Engineer" > jd_stub.md
+      - name: Build smoke artifacts
+        run: |
+          python -m scripts.build_artifacts --candidates candidates_synth.jsonl --job-description jd_stub.md --out artifacts_smoke --max-candidates 100 --skip-reasoning
+      - name: Run ranker end-to-end
+        run: |
+          python -m src.serving.rank --candidates candidates_synth.jsonl --job-description jd_stub.md --artifacts artifacts_smoke --out outputs_smoke/team_xxx.csv --top-k 100
+      - name: Validate submission
+        run: |
+          python -c "
+          import csv
+          with open('outputs_smoke/team_xxx.csv') as f:
+            rows = list(csv.DictReader(f))
+            assert len(rows) == 100, len(rows)
+            ranks = [int(r['rank']) for r in rows]
+            assert ranks == list(range(1,101)), ranks
+            scores = [float(r['score']) for r in rows]
+            assert all(scores[i] >= scores[i+1] for i in range(len(scores)-1))
+            print('OK')
+          "
