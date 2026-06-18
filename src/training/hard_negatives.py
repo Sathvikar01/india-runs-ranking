@@ -24,8 +24,17 @@ def mine_hard_negatives(
     rel_threshold: float = 1.0,
 ) -> list[str]:
     """Return candidate_ids where ltr_score is high but proxy_relevance is low."""
+    from src.preprocessing.feature_engineer import categorical_columns
+
     relevance = build_proxy_ground_truth(candidates)
-    X = features_df.loc[:, feature_columns()].copy()
+    # LTRModel.predict expects both numeric feature columns AND categorical
+    # columns in the right dtype (categorical as category dtype).
+    all_cols = list(ltr.feature_columns) + [c for c in categorical_columns() if c not in ltr.feature_columns]
+    X = features_df.loc[:, all_cols].copy()
+    # Cast categorical columns to category dtype (LightGBM expects this).
+    for c in categorical_columns():
+        if c in X.columns:
+            X[c] = X[c].astype("category")
     scores = ltr.predict(X)
     df = features_df[["candidate_id"]].copy()
     df["ltr_score"] = scores

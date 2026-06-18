@@ -9,6 +9,25 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+# Path to the official validator. The folder name has brackets which
+# Windows PowerShell glob expansion eats; we resolve it explicitly.
+VALIDATOR = (
+    REPO_ROOT.parent
+    / "[PUB] India_runs_data_and_ai_challenge"
+    / "India_runs_data_and_ai_challenge"
+    / "validate_submission.py"
+)
+
+
+def _run_validator(csv_path: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(VALIDATOR), str(csv_path)],
+        capture_output=True,
+        text=True,
+        shell=False,
+    )
+
 
 @pytest.mark.integration
 def test_validate_submission_passes(tmp_path: Path):
@@ -24,12 +43,9 @@ def test_validate_submission_passes(tmp_path: Path):
         w.writeheader()
         w.writerows(rows)
 
-    cmd = [
-        sys.executable,
-        "[PUB] India_runs_data_and_ai_challenge/India_runs_data_and_ai_challenge/validate_submission.py",
-        str(out),
-    ]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    if not VALIDATOR.exists():
+        pytest.skip(f"official validator not present at {VALIDATOR}")
+    r = _run_validator(out)
     assert r.returncode == 0, f"validator rejected: {r.stdout}\n{r.stderr}"
 
 
@@ -42,10 +58,7 @@ def test_validate_submission_rejects_bad_rows(tmp_path: Path):
         w.writerow(["candidate_id", "rank", "score", "reasoning"])
         for rank in range(1, 100):
             w.writerow([f"CAND_{rank:07d}", rank, 0.5, ""])
-    cmd = [
-        sys.executable,
-        "[PUB] India_runs_data_and_ai_challenge/India_runs_data_and_ai_challenge/validate_submission.py",
-        str(out),
-    ]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    if not VALIDATOR.exists():
+        pytest.skip(f"official validator not present at {VALIDATOR}")
+    r = _run_validator(out)
     assert r.returncode != 0

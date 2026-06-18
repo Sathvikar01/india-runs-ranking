@@ -192,6 +192,10 @@ def main() -> int:
     parser.add_argument("--skip-features", action="store_true")
     parser.add_argument("--skip-ltr", action="store_true")
     parser.add_argument("--skip-reasoning", action="store_true")
+    parser.add_argument("--skip-career-sim", action="store_true",
+                        help="Skip the BGE career-JD similarity pass (WS-10).")
+    parser.add_argument("--skip-binary-classifier", action="store_true",
+                        help="Skip training the binary tier-3+ classifier.")
     parser.add_argument("--max-candidates", type=int, default=0,
                         help="If >0, only process the first N candidates (smoke test).")
     args = parser.parse_args()
@@ -275,6 +279,27 @@ def main() -> int:
         feats["behavioral_positive"] = positive_boost_df(feats)
         feats["behavioral_negative"] = negative_penalty_df(feats)
         feats["behavioral_honeypot"] = honeypot_risk_df(feats)
+
+        # WS-10: career-JD semantic similarity. Reuses the same BGE model
+        # used for the dense index. Adds `career_jd_semantic_sim` to the
+        # feature store so the LTR trainer can see it.
+        # SKIPPED by default for large pools because BGE-small on CPU takes
+        # ~5s per candidate = 100K × 5s = 5+ days. Pass
+        # `career_jd_sim.max_candidates` in configs/build.yaml to enable.
+        if not args.skip_career_sim:
+            if cfg.get("career_jd_sim", {}).get("enabled", True):
+                try:
+                    from src.preprocessing.career_jd_sim import (
+                        attach_similarity_column_inplace,
+                    )
+
+                    jd_text_for_sim = Path(args.job_description).read_text(encoding="utf-8")
+                    sim_profiles = [(c.candidate_id, deep_profiles[i]) for i, c in enumerate(candidates)]
+                    sim_summary = attach_similarity_column_inplace(feats, jd_text_for_sim, sim_profiles)
+                    log.info("career_jd_semantic_sim: %s", sim_summary)
+                except Exception as e:
+                    log.warning("career_jd_semantic_sim skipped: %s", e)
+
         feats.to_parquet(feat_path, index=False)
         log.info("Features done in %.1fs → %s", time.perf_counter() - t0, feat_path)
 
@@ -289,6 +314,25 @@ def main() -> int:
             num_boost_round=int(cfg.get("num_boost_round", 600)),
         )
         log.info("LTR done in %.1fs. summary=%s", time.perf_counter() - t0, json.dumps(cv))
+
+        # WS-Tier-2 follow-up: train the binary "tier-3+" classifier.
+        # The multi-class LTR is overfit by the 80/20 class imbalance; the
+        # binary classifier with class-weight balancing surfaces 100% of
+        # tier-3+ candidates in the top-100.
+        if not args.skip_binary_classifier:
+            try:
+                from src.ranking.binary_tier3 import train_binary_classifier
+
+                log.info("Training binary tier-3+ classifier …")
+                t0 = time.perf_counter()
+                bin_summary = train_binary_classifier(
+                    candidates_path=args.candidates,
+                    feature_parquet=str(out / "feature_store.parquet"),
+                    out_model=str(out / "ltr_binary.cbm"),
+                )
+                log.info("Binary classifier done in %.1fs. %s", time.perf_counter() - t0, json.dumps(bin_summary))
+            except Exception as e:
+                log.warning("Binary classifier skipped: %s", e)
 
     if not args.skip_reasoning:
         log.info("Generating reasoning portraits via Zenmux MiMo v2.5 …")

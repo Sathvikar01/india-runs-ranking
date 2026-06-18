@@ -7,6 +7,12 @@ build:
   random_seed: 42
   mlflow_tracking_uri: null  # set to "./mlruns" to enable local tracking
 
+# WS-10 / WS-Tier 1 follow-up: BGE career-JD similarity is too slow on CPU
+# for 100K candidates (~5s per candidate = 5+ days). Disable by default;
+# opt-in for small builds.
+career_jd_sim:
+  enabled: false  # set to true for pools <= 5000 candidates
+
 embedding:
   model_name: BAAI/bge-small-en-v1.5
   dim: 384
@@ -24,9 +30,9 @@ bm25:
   token_pattern: "(?u)\\b\\w[a-zA-Z0-9+#.-]{1,}\\b"
 
 cross_encoder:
-  model_name: cross-encoder/ms-marco-MiniLM-L-6-v2
-  top_k_from_retrieval: 500
-  top_k_output: 200
+  model_name: artifacts/ce_finetuned  # Tier-3 fine-tuned on binary tier-3+ labels (AP=0.889)
+  top_k_from_retrieval: 800  # WS-12: was 500, expanded to improve recall
+  top_k_output: 400          # WS-12: was 200, more candidates get LTR + CatBoost scoring
   max_length: 256
   batch_size: 64
   device: cpu

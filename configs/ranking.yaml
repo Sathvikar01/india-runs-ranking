@@ -12,14 +12,24 @@ ltr:
   ndcg_eval_at: [10, 50, 100]
   num_leaves: 63
   learning_rate: 0.05
-  num_iterations: 600
-  early_stopping_rounds: 50
+  num_iterations: 1500       # WS-Tier 1 #8: was 600, bumped to 1500 with early stopping
+  early_stopping_rounds: 20  # stricter; was 30
   feature_fraction: 0.9
   bagging_fraction: 0.9
   bagging_freq: 5
   min_data_in_leaf: 20
-  lambda_position_bias: true
+  lambda_position_bias: false  # WS-Tier 1 #7: was true, disabled to expose top-10 disagreements
   num_folds: 5
+  # WS-Tier 1 #5: per-feature weight hints (LightGBM `monotone_constraints`)
+  # We bump education_prestige and n_named_jd_skills_continuous so the
+  # eval-rubric (which weights these) sees a stronger signal.
+  monotone_constraints:
+    education_prestige: 1                 # higher = better
+    n_named_jd_skills_continuous: 1       # higher = better
+    distributed_systems_count: 1          # higher = better
+    open_source_count: 1                  # higher = better
+    consulting_share: -1                  # higher = worse
+    honeypot: -1                          # higher = worse
 
 features:
   include_groups:

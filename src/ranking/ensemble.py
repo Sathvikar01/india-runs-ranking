@@ -34,8 +34,16 @@ def ensemble_score(
     positive: float,
     negative: float,
     honeypot: float,
+    catboost_score: float = 0.0,
+    catboost_weight: float = 0.0,
 ) -> float:
-    """Combine signals into a single 0-1 score. Higher is better."""
+    """Combine signals into a single 0-1 score. Higher is better.
+
+    WS-6: a small additive CatBoost signal is now part of the ensemble.
+    `catboost_score` is expected to be in roughly the same scale as the
+    LTR sigmoid term. We add `catboost_weight * sigmoid(catboost_score)` to
+    the base, capped at 1.0.
+    """
     base = (
         0.55 * _sigmoid(ltr_score)
         + 0.20 * _sigmoid(ce_score)
@@ -44,13 +52,27 @@ def ensemble_score(
         - 0.10 * _clip01(negative)
         - 0.20 * _clip01(honeypot)
     )
+    if catboost_weight > 0.0:
+        base = base + catboost_weight * _sigmoid(catboost_score)
     return _clip01(base)
 
 
 def make_monotonic_scores(raw_scores: list[float]) -> list[float]:
-    """Convert raw ensemble scores into strictly non-increasing final scores in
-    [score_min, score_max]. We add a tiny rank-based decrement so equal scores
-    still produce distinct ranks.
+    """DEPRECATED — prefer `make_monotonic_scores_for_topk` for new code.
+
+    This function preserves the input order in the output, which means the
+    output is *not* monotonic when the input is in MMR-reordered (not
+    pre-sorted) order. It is kept for backwards compatibility with the
+    one call site that explicitly needs the input-order behaviour.
+
+    Use `make_monotonic_scores_for_topk` when the input is already in
+    the desired output order (e.g. after MMR has reordered the head).
+
+    The output has the *same length* as the input and preserves the input
+    order — but every output value is one of the strictly-decreasing
+    scores we assign to ranks 0..n-1. Concretely: we sort (index, score)
+    pairs by score descending, then for each pair we write
+    `output[index] = base_top - new_rank * step - jitter`.
     """
     if not raw_scores:
         return []
@@ -66,6 +88,26 @@ def make_monotonic_scores(raw_scores: list[float]) -> list[float]:
         jitter = (new_rank * 1e-5) % 1e-3
         final[orig_idx] = base_top - new_rank * step - jitter
     return [_clip01(v) for v in final]
+
+
+def make_monotonic_scores_for_topk(raw_scores: list[float]) -> list[float]:
+    """Strictly-decreasing scores in INPUT order.
+
+    Unlike `make_monotonic_scores`, this returns scores in the same order
+    as the input list: output[i] is the i-th strictly-decreasing value
+    (rank i). This is the correct function to call when the input is in
+    the desired output order — e.g., after MMR has reordered the head
+    and you want rank 1 to get the highest score, rank 2 the next, etc.
+    """
+    if not raw_scores:
+        return []
+    n = len(raw_scores)
+    base_top = 0.99
+    base_bottom = 0.20
+    if n == 1:
+        return [base_top]
+    step = (base_top - base_bottom) / max(1, n - 1)
+    return [_clip01(base_top - i * step - (i * 1e-5) % 1e-3) for i in range(n)]
 
 
 def rank_candidates(

@@ -98,8 +98,12 @@ def _run_ranking(
     portraits: dict[str, dict],
     cfg: dict,
 ) -> pd.DataFrame:
+    # WS-7: expand the dense query with skill synonyms.
+    from src.retrieval.query_rewriter import expand_query
+
+    dense_query_text = expand_query(jd_text)
     q_vec = encode_queries(
-        [jd_text],
+        [dense_query_text],
         model_name=cfg["embedding"]["model_name"],
         batch_size=1,
         max_seq_length=cfg["embedding"]["max_seq_length"],

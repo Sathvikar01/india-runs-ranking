@@ -33,6 +33,91 @@ from src.preprocessing.normalize import (
 
 SENIORITY_FLOOR = 3  # 0=intern, 1=junior, 2=mid, 3=senior, 4=staff, 5=manager
 
+# JD-specific named skills (referenced in the job description, used for the
+# `has_named_jd_skill_*` features and the LLM anti-hallucination validator).
+JD_NAMED_SKILLS: tuple[str, ...] = (
+    "retrieval",
+    "ranking",
+    "rerank",
+    "embeddings",
+    "vector search",
+    "rag",
+    "fine-tuning",
+    "lora",
+    "peft",
+    "rlhf",
+    "eval",
+    "pytorch",
+    "transformers",
+    "sentence-transformers",
+    "faiss",
+    "elasticsearch",
+    "pinecone",
+    "weaviate",
+    "learning to rank",
+    "lambdarank",
+)
+
+
+# WS-12: Tier-1/Tier-2 school prestige list (loaded from configs/school_prestige.yaml).
+# Falls back to a small built-in list if the config isn't found.
+_DEFAULT_TIER_1: tuple[str, ...] = (
+    "IIT Bombay", "IIT Delhi", "IIT Madras", "IIT Kanpur", "IIT Kharagpur",
+    "IIM Ahmedabad", "IIM Bangalore", "IIM Calcutta",
+    "MIT", "Stanford", "Carnegie Mellon", "Berkeley", "ETH Zurich",
+    "National University of Singapore", "NUS",
+)
+_DEFAULT_TIER_2: tuple[str, ...] = (
+    "IIT Hyderabad", "IIT Indore", "IIT BHU", "IIT (BHU) Varanasi",
+    "NIT Trichy", "NIT Warangal", "BITS Pilani",
+    "University of Michigan", "Georgia Tech", "University of Toronto",
+    "University of Waterloo", "University of Melbourne", "HKUST",
+)
+
+
+def _load_school_prestige() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Load the school prestige list from configs/school_prestige.yaml."""
+    try:
+        import yaml
+        from pathlib import Path
+
+        # Search in (a) CWD/configs, (b) the package-relative configs dir.
+        candidates = [
+            Path("configs/school_prestige.yaml"),
+            Path(__file__).resolve().parents[2] / "configs" / "school_prestige.yaml",
+        ]
+        for cfg_path in candidates:
+            if cfg_path.exists():
+                data = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+                t1 = tuple(s.lower() for s in data.get("tier_1", ()))
+                t2 = tuple(s.lower() for s in data.get("tier_2", ()))
+                return t1, t2
+    except Exception:
+        pass
+    return tuple(s.lower() for s in _DEFAULT_TIER_1), tuple(s.lower() for s in _DEFAULT_TIER_2)
+
+
+def _school_prestige_score(c: Candidate) -> float:
+    """1.0 if any education matches a tier-1 school, 0.5 for tier-2, else 0.
+
+    Matching is case-insensitive substring on `institution`.
+    """
+    if not c.education:
+        return 0.0
+    t1, t2 = _load_school_prestige()
+    best = 0.0
+    for e in c.education:
+        inst = (e.institution or "").lower()
+        if not inst:
+            continue
+        for needle in t1:
+            if needle in inst:
+                return 1.0
+        for needle in t2:
+            if needle in inst:
+                best = max(best, 0.5)
+    return best
+
 
 def _parse_date(s: str | None) -> date | None:
     if not s:
@@ -190,6 +275,186 @@ def _notice_period_score(notice_days: int) -> float:
     return 0.0
 
 
+# ---------------------------------------------------------------------------
+# New features (WS-5)
+# ---------------------------------------------------------------------------
+
+# Numeric ordering for title-seniority consistency. Higher bucket = more senior.
+_SENIORITY_BUCKET_INDEX: dict[str, int] = {
+    "intern": 0,
+    "junior": 1,
+    "mid": 2,
+    "senior": 3,
+    "staff": 4,
+    "manager": 5,
+    "unknown": 2,  # default: treat as mid-band
+}
+
+
+def _expected_seniority_for_yoe(yoe: float) -> int:
+    """Map years-of-experience to an expected title-bucket index.
+
+    Mirrors typical industry ladders: <2 yrs → junior, 2-5 → mid,
+    5-9 → senior, 9+ → staff/manager.
+    """
+    if yoe < 2:
+        return _SENIORITY_BUCKET_INDEX["junior"]
+    if yoe < 5:
+        return _SENIORITY_BUCKET_INDEX["mid"]
+    if yoe <= 9:
+        return _SENIORITY_BUCKET_INDEX["senior"]
+    return _SENIORITY_BUCKET_INDEX["staff"]
+
+
+def _title_yoe_consistency(c: Candidate, yoe: float) -> float:
+    """Signed delta: expected-bucket index minus actual title-bucket index.
+
+    Negative → title is junior for the experience; positive → title is more
+    senior than typical. The JD explicitly warns about title/evidence
+    mismatches (e.g. "Junior" with 6+ yrs).
+    """
+    title = c.profile.current_title or ""
+    actual = _SENIORITY_BUCKET_INDEX.get(title_seniority_bucket(title), 2)
+    expected = _expected_seniority_for_yoe(yoe)
+    return float(expected - actual)
+
+
+def _title_yoe_inconsistent(c: Candidate, yoe: float) -> int:
+    """Hard 0/1: 1 if the title is at least 2 buckets below the expected
+    bucket for the candidate's YOE. e.g. "Junior" with 6+ yrs, or "Mid"
+    with 12+ yrs. This is the "title chaser" anti-pattern the JD warns
+    about. Strong negative signal for the LTR.
+    """
+    if yoe < 2:
+        return 0
+    title = c.profile.current_title or ""
+    actual = _SENIORITY_BUCKET_INDEX.get(title_seniority_bucket(title), 2)
+    expected = _expected_seniority_for_yoe(yoe)
+    return int((expected - actual) >= 2)
+
+
+def _career_progression(c: Candidate) -> float:
+    """Signed slope of title-seniority across roles (chronological order).
+
+    Positive → titles became more senior over time (a JD-positive signal);
+    negative → titles flattened or dropped.
+    """
+    roles = c.career_history
+    if len(roles) < 2:
+        return 0.0
+    series = [
+        _SENIORITY_BUCKET_INDEX.get(title_seniority_bucket(r.title), 2)
+        for r in roles
+    ]
+    n = len(series)
+    xs = list(range(n))
+    mean_x = sum(xs) / n
+    mean_y = sum(series) / n
+    num = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, series, strict=True))
+    den = sum((x - mean_x) ** 2 for x in xs)
+    if den < 1e-9:
+        return 0.0
+    return float(num / den)
+
+
+def _n_distinct_industries(c: Candidate) -> int:
+    return len({(r.industry or "").strip().lower() for r in c.career_history if (r.industry or "").strip()})
+
+
+def _has_named_jd_skill_count(c: Candidate, career: str, skills_text: str) -> int:
+    """How many of the JD's named skills appear in the candidate's career
+    text or skill list. Used as a single integer and as a count of buckets.
+    """
+    blob = (career or "").lower() + " " + (skills_text or "").lower()
+    n = 0
+    for needle in JD_NAMED_SKILLS:
+        if needle in blob:
+            n += 1
+    return n
+
+
+def _n_named_jd_skills_continuous(c: Candidate, career: str, skills_text: str) -> float:
+    """WS-12 follow-up: continuous version of `n_named_jd_skills`.
+
+    Returns the count normalised by the total number of JD-named skills, so
+    the value lives in [0, 1] and LightGBM can give it a continuous weight
+    instead of treating it as a sparse integer. Tier 1 #4.
+    """
+    n = _has_named_jd_skill_count(c, career, skills_text)
+    return min(1.0, n / max(1, len(JD_NAMED_SKILLS)))
+
+
+def _distributed_systems_count(c: Candidate, career: str) -> int:
+    """WS-12 follow-up: count of role descriptions that mention
+    distributed-systems keywords. Used as a continuous feature
+    (vs the binary `is_distributed_systems_evidence` in the proxy).
+    """
+    keys = (
+        "distributed", "spark", "kafka", "ray", "kubernetes", "microservice",
+        "grpc", "cuda", "gpu", "tpu", "horovod", "deepspeed",
+    )
+    n = 0
+    blob = (career or "").lower()
+    for r in c.career_history:
+        d = (r.description or "").lower()
+        if any(k in d for k in keys):
+            n += 1
+    # Bonus: if the whole blob mentions these, +1
+    if any(k in blob for k in keys):
+        n = max(n, 1)
+    return n
+
+
+def _open_source_count(c: Candidate, career: str) -> int:
+    """WS-12 follow-up: count of role descriptions that mention
+    open-source signals. Used as a continuous feature.
+    Matches the binary `_has_open_source_evidence` logic: counts any
+    role with a description match + 1 if `github_activity_score >= 30`.
+    """
+    keys = (
+        "open source", "open-source", "github.com", "github.io", "arxiv",
+        "paper", "medium", "kaggle", "huggingface.co", "contributor", "foss",
+    )
+    n = 0
+    blob = (career or "").lower()
+    for r in c.career_history:
+        d = (r.description or "").lower()
+        if any(k in d for k in keys):
+            n += 1
+    if any(k in blob for k in keys):
+        n = max(n, 1)
+    if c.redrob_signals.github_activity_score and c.redrob_signals.github_activity_score >= 30:
+        n = max(n, 1)
+    return n
+
+
+def _consulting_to_product_transition(c: Candidate) -> int:
+    """1 iff the candidate's career went from consulting → product."""
+    if len(c.career_history) < 2:
+        return 0
+    earliest = c.career_history[-1]
+    latest = c.career_history[0]
+    return int(is_consulting_company(earliest.company) and not is_consulting_company(latest.company))
+
+
+def _endorsement_entropy(c: Candidate) -> float:
+    """Shannon entropy of endorsement counts across skills.
+
+    A profile where all endorsements concentrate in 1-2 skills scores low
+    (low diversity, possible keyword stuffing); a balanced profile scores
+    high. Returns 0 for empty skills.
+    """
+    if not c.skills:
+        return 0.0
+    counts = [max(1, int(s.endorsements)) for s in c.skills]
+    total = sum(counts)
+    if total <= 0:
+        return 0.0
+    import math as _math
+
+    return -sum((c_n / total) * _math.log2(c_n / total) for c_n in counts if c_n > 0)
+
+
 def _recency_score(last_active: str | None, today: date) -> float:
     days = _days_ago(last_active, today)
     if days is None:
@@ -252,6 +517,15 @@ def build_features(c: Candidate, today: date | None = None) -> dict[str, Any]:
         "n_education": len(c.education),
         "education_tier_1": int(any((e.tier or "").lower() == "tier_1" for e in c.education)),
         "education_tier_2": int(any((e.tier or "").lower() == "tier_2" for e in c.education)),
+        "education_prestige": _school_prestige_score(c),
+
+        # ------------------------------------------------------------------
+        # WS-10: career-JD semantic similarity (BGE cosine).
+        # Filled in at build time by `career_jd_sim.attach_similarity_column_inplace`
+        # AFTER `build_features` returns. Default 0.0 here so the column is
+        # always present in the feature frame.
+        # ------------------------------------------------------------------
+        "career_jd_semantic_sim": 0.0,
 
         # ------------------------------------------------------------------
         # Raw signal passthroughs (needed by vectorized behavioral scoring)
@@ -302,6 +576,20 @@ def build_features(c: Candidate, today: date | None = None) -> dict[str, Any]:
         "has_open_source_evidence": int(_has_opensource_github(c) or any(
             k in career.lower() for k in ("open source", "open-source", "github.com", "arxiv", "paper", "publication")
         )),
+
+        # ------------------------------------------------------------------
+        # New features (WS-5)
+        # ------------------------------------------------------------------
+        "title_yoe_consistency": _title_yoe_consistency(c, yoe),
+        "title_yoe_inconsistent": _title_yoe_inconsistent(c, yoe),
+        "career_progression": _career_progression(c),
+        "n_distinct_industries": _n_distinct_industries(c),
+        "n_named_jd_skills": _has_named_jd_skill_count(c, career, skills_text),
+        "n_named_jd_skills_continuous": _n_named_jd_skills_continuous(c, career, skills_text),
+        "distributed_systems_count": _distributed_systems_count(c, career),
+        "open_source_count": _open_source_count(c, career),
+        "consulting_to_product_transition": _consulting_to_product_transition(c),
+        "endorsement_entropy": _endorsement_entropy(c),
 
         # ------------------------------------------------------------------
         # Company / industry profile
@@ -388,12 +676,19 @@ def feature_columns() -> list[str]:
         "yoe_reported", "yoe_career_sum", "yoe_diff",
         "n_career_roles", "n_current_roles", "avg_tenure_months",
         "n_skills", "n_projects", "n_certifications", "n_education",
-        "education_tier_1", "education_tier_2",
+        "education_tier_1", "education_tier_2", "education_prestige",
         "seniority_at_least_senior", "seniority_at_least_staff", "yoe_in_5_9_band",
         "ai_keyword_hits_career", "ai_keyword_hits_skills", "ai_career_share",
         "ai_skill_count", "n_ai_skill_advanced",
         "has_retrieval_ranking_evidence", "has_llm_finetune_evidence",
         "has_shipped_to_users", "has_distributed_systems_evidence", "has_open_source_evidence",
+        # WS-5 new features
+        "title_yoe_consistency", "title_yoe_inconsistent", "career_progression", "n_distinct_industries",
+        "n_named_jd_skills", "n_named_jd_skills_continuous", "distributed_systems_count", "open_source_count",
+        "consulting_to_product_transition", "endorsement_entropy",
+        # WS-10: BGE cosine similarity between candidate's deep_profile and the JD.
+        # Computed once at build time; re-loaded with the feature store.
+        "career_jd_semantic_sim",
         "consulting_share", "consulting_only", "product_company_count",
         "current_industry_ai_ml", "current_company_is_consulting",
         "skill_expert_zero_months", "skill_zero_months_total", "all_skills_zero_endorsements",
@@ -422,3 +717,43 @@ def safe_log1p(x: float) -> float:
     if x is None or (isinstance(x, float) and (math.isnan(x) or math.isinf(x))):
         return 0.0
     return math.log1p(max(0.0, x))
+
+
+def evidence_snippet(c: Candidate, min_words: int = 12, max_words: int = 18) -> str:
+    """Return a 12-18 word verbatim snippet from the candidate's current role.
+
+    The snippet is what the ranker splices into the template reasoner to
+    satisfy the "Specific facts" check in `submission_spec.md:77-79`. If no
+    suitable snippet exists, returns an empty string and the reasoner
+    falls back to a generic statement.
+    """
+    role = _current_role(c)
+    desc = (role.description or "").strip() if role else ""
+    if not desc:
+        return ""
+    words = desc.split()
+    if len(words) <= max_words:
+        return " ".join(words)
+    # Try to keep a sentence boundary near the middle.
+    target = min_words + (max_words - min_words) // 2
+    snippet = " ".join(words[:max_words])
+    # Re-trim to last full stop if possible.
+    if "." in snippet:
+        cut = snippet.rfind(".")
+        if cut >= min_words:
+            snippet = snippet[: cut + 1]
+    return snippet.strip()
+
+
+def pick_named_jd_skill(c: Candidate) -> str:
+    """Return the first JD-named skill (from `JD_NAMED_SKILLS`) that actually
+    appears in the candidate's career or skills text. Used by the template
+    reasoner to satisfy the "JD connection" check. Returns "" if none.
+    """
+    from src.preprocessing.deep_profile import build_career_text, build_skills_text
+
+    blob = ((build_career_text(c) or "") + " " + (build_skills_text(c) or "")).lower()
+    for needle in JD_NAMED_SKILLS:
+        if needle in blob:
+            return needle
+    return ""

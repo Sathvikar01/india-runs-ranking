@@ -18,7 +18,24 @@ import pandas as pd
 
 from src.api.schemas import Candidate
 from src.evaluation.ndcg import evaluate_ranking
-from src.evaluation.proxy_ground_truth import build_proxy_ground_truth
+
+
+def _build_relevance(candidates: list[Candidate], use_proxy: bool = False) -> dict[str, float]:
+    """Return the eval-relevance dict.
+
+    WS-4: defaults to the *independent* eval rubric. Set `use_proxy=True` to
+    fall back to the proxy ground truth (the labels the LTR trainer was
+    actually trained on). The two functions are intentionally different
+    sub-scoring rules so an LTR model that scores well on `eval_rubric` is
+    doing more than memorising the proxy.
+    """
+    if use_proxy:
+        from src.evaluation.proxy_ground_truth import build_proxy_ground_truth
+
+        return build_proxy_ground_truth(candidates)
+    from src.evaluation.eval_rubric import build_eval_ground_truth
+
+    return build_eval_ground_truth(candidates)
 
 
 @dataclass
@@ -45,11 +62,12 @@ def run_ablations(
     candidates: list[Candidate],
     ablation_fns: dict[str, Callable[[list[Candidate]], list[str]]],
     out_dir: str | Path = "outputs/ablations",
+    use_proxy_labels: bool = False,
 ) -> list[AblationResult]:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    relevance = build_proxy_ground_truth(candidates)
+    relevance = _build_relevance(candidates, use_proxy=use_proxy_labels)
     results: list[AblationResult] = []
     for name, fn in ablation_fns.items():
         metrics = _apply_ranking(candidates, relevance, fn)

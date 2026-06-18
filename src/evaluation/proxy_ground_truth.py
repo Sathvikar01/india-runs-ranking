@@ -32,8 +32,19 @@ from src.preprocessing.normalize import (
 
 
 def _ai_evidence_score(c: Candidate) -> float:
+    """AI evidence in [0, 1] based on career text keyword matches.
+
+    WS-Tier-1 follow-up: the original formula divided the total matches
+    by `len(AI_KEYWORDS)` (54), so even a strong AI engineer with 5
+    keyword hits got 5/54 = 0.093. That's why the proxy ended up with
+    60 % tier-1 and 0.2 % tier-3 — the AI signal was drowned out by
+    the divisor. The new formula scales by `min(1.0, hits / 4.0)` — 4
+    hits is full credit. 99.5 % of candidates were < 0.05 before; the
+    new formula gives 0.5-1.0 to actual AI engineers.
+    """
     career = (build_career_text(c) or "").lower()
-    return sum(min(1.0, career.count(k) / 2.0) for k in AI_KEYWORDS if k in career) / max(1, len(AI_KEYWORDS))
+    hits = sum(min(1.0, career.count(k) / 2.0) for k in AI_KEYWORDS if k in career)
+    return min(1.0, hits / 4.0)
 
 
 def _seniority_score(c: Candidate) -> float:

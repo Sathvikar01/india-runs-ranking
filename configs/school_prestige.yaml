@@ -1,0 +1,76 @@
+# Tier-1 school prestige list (WS-12).
+#
+# The JD says: "tier-1 or tier-2 education". We treat this as a binary
+# feature today. This list provides a more granular prestige score for
+# the most-cited schools in the data, so a CS degree from IIT Bombay ranks
+# higher than from a generic "State University" in the LTR.
+#
+# Add a school to the appropriate tier as new data demands. The list is
+# deliberately small + high-signal to avoid over-fitting.
+#
+# Scoring rule:
+#   * tier_1: 1.0 (full credit; rare, top of the JD's preference list)
+#   * tier_2: 0.5 (partial credit)
+#   * otherwise: 0.0
+#
+# The matching is case-insensitive substring on `institution`. Common
+# variants (e.g. "IIT Bombay" / "Indian Institute of Technology, Bombay")
+# are listed explicitly.
+tier_1:
+  # India: top IITs
+  - "IIT Bombay"
+  - "IIT Delhi"
+  - "IIT Madras"
+  - "IIT Kanpur"
+  - "IIT Kharagpur"
+  - "IIT Roorkee"
+  - "Indian Institute of Technology, Bombay"
+  - "Indian Institute of Technology, Delhi"
+  - "Indian Institute of Technology, Madras"
+  - "Indian Institute of Technology, Kanpur"
+  - "Indian Institute of Technology, Kharagpur"
+  # India: top IIMs
+  - "IIM Ahmedabad"
+  - "IIM Bangalore"
+  - "IIM Calcutta"
+  - "Indian Institute of Management, Ahmedabad"
+  - "Indian Institute of Management, Bangalore"
+  - "Indian Institute of Management, Calcutta"
+  # Global: top 50 (commonly-cited AI/CS institutions)
+  - "MIT"
+  - "Stanford"
+  - "Carnegie Mellon"
+  - "Berkeley"
+  - "University of California, Berkeley"
+  - "Cambridge"
+  - "Oxford"
+  - "ETH Zurich"
+  - "National University of Singapore"
+  - "NUS"
+  - "Tsinghua"
+  - "Peking University"
+
+tier_2:
+  # India: second-tier IITs / NITs
+  - "IIT Hyderabad"
+  - "IIT Indore"
+  - "IIT Roorkee"
+  - "IIT BHU"
+  - "IIT (BHU) Varanasi"
+  - "NIT Trichy"
+  - "NIT Warangal"
+  - "NIT Surathkal"
+  - "BITS Pilani"
+  - "Birla Institute of Technology and Science"
+  - "IIM Lucknow"
+  - "IIM Indore"
+  # Global: regional top schools
+  - "University of Michigan"
+  - "University of Illinois"
+  - "Georgia Tech"
+  - "University of Toronto"
+  - "University of Waterloo"
+  - "University of Melbourne"
+  - "University of Sydney"
+  - "HKUST"
+  - "KAIST"

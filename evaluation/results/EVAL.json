@@ -1,0 +1,386 @@
+{
+  "ranker": {
+    "output_path": "C:\\Users\\arsat\\OneDrive\\Desktop\\india\\india-runs-ranking\\evaluation\\results\\submission.csv",
+    "wall_clock_s": 109.5,
+    "log_tail": ""
+  },
+  "candidates_path": "C:\\Users\\arsat\\OneDrive\\Desktop\\india\\india-runs-ranking\\data\\raw\\candidates.jsonl",
+  "ranking": {
+    "proxy": {
+      "ndcg@5": 0.7616781173376767,
+      "p@5": 1.0,
+      "ndcg@10": 0.6934444979338795,
+      "p@10": 1.0,
+      "ndcg@50": 0.7451156491017338,
+      "p@50": 1.0,
+      "ndcg@100": 0.9107817627173692,
+      "p@100": 1.0,
+      "map": 1.0,
+      "mrr": 1.0,
+      "composite": 0.7702569436974599
+    },
+    "proxy_composite": 0.7703,
+    "eval_rubric": {
+      "ndcg@5": 0.7175281508191775,
+      "p@5": 1.0,
+      "ndcg@10": 0.6987252776496224,
+      "p@10": 1.0,
+      "ndcg@50": 0.7206700755204162,
+      "p@50": 1.0,
+      "ndcg@100": 0.8895112213417888,
+      "p@100": 1.0,
+      "map": 1.0,
+      "mrr": 1.0,
+      "composite": 0.7655636614809361
+    },
+    "eval_rubric_composite": 0.7656,
+    "ranking_score_0_1": 0.7656,
+    "composite_weights": {
+      "ndcg@10": 0.5,
+      "ndcg@50": 0.3,
+      "map": 0.15,
+      "p@10": 0.05
+    }
+  },
+  "reasoning": {
+    "reasoning_score_0_1": 0.92,
+    "per_check_pass_rate": {
+      "specific_facts": 1.0,
+      "jd_connection": 0.53,
+      "honest_concerns": 0.99,
+      "no_hallucination": 1.0,
+      "variation": 1.0,
+      "rank_consistency": 1.0
+    },
+    "audit_summary": {
+      "n_rows": 100,
+      "n_clean": 53,
+      "n_with_facts": 100,
+      "n_with_jd_connection": 53,
+      "n_with_honest_concerns": 99,
+      "n_hallucination_issues": 0,
+      "n_unique_reasonings": 100,
+      "mean_pairwise_jaccard": 0.1447,
+      "length_distribution": {
+        "min": 147,
+        "max": 237,
+        "mean": 203.85,
+        "below_50": 0,
+        "above_320": 0
+      },
+      "rank_consistency": {
+        "ok": 100
+      }
+    }
+  },
+  "system": {
+    "system_score_0_1": 0.9,
+    "per_check": {
+      "tests_pass": {
+        "passed": true,
+        "n_passed": 137
+      },
+      "lint_clean": {
+        "passed": false,
+        "stdout_tail": "                  \u001b[1m\u001b[91m^^^^^^^^^^^^^^^^\u001b[0m\n   \u001b[1m\u001b[94m|\u001b[0m\n\nFound 310 errors.\n[\u001b[36m*\u001b[0m] 93 fixable with the `--fix` option (12 hidden fixes can be enabled with the `--unsafe-fixes` option).\n"
+      },
+      "output_100_rows": {
+        "passed": true,
+        "n_rows": 100
+      },
+      "monotonic_scores": {
+        "passed": true,
+        "first_score": 0.99,
+        "last_score": 0.199
+      },
+      "rank_1_to_100_unique": {
+        "passed": true,
+        "n_unique_ranks": 100,
+        "n_unique_cids": 100
+      },
+      "validator_passes": {
+        "passed": true,
+        "stdout_tail": "Submission is valid.\n"
+      },
+      "reproducible": {
+        "passed": true,
+        "skipped": "skipped for speed"
+      }
+    }
+  },
+  "audit": {
+    "audit_score_0_1": 1.0,
+    "architecture": 1.0,
+    "docs": 1.0,
+    "notes": []
+  },
+  "feature_importance_summary": {
+    "top_20_by_gain": [
+      {
+        "feature": "ai_keyword_hits_career",
+        "gain": 6379.415278298779,
+        "split_count": 1337,
+        "gain_pct": 82.95
+      },
+      {
+        "feature": "ai_career_share",
+        "gain": 510.5539735194916,
+        "split_count": 118,
+        "gain_pct": 6.64
+      },
+      {
+        "feature": "yoe_in_5_9_band",
+        "gain": 128.29885689244765,
+        "split_count": 538,
+        "gain_pct": 1.67
+      },
+      {
+        "feature": "product_company_count",
+        "gain": 104.31693797663371,
+        "split_count": 834,
+        "gain_pct": 1.36
+      },
+      {
+        "feature": "has_ai_career_evidence",
+        "gain": 93.97962500154972,
+        "split_count": 15,
+        "gain_pct": 1.22
+      },
+      {
+        "feature": "consulting_share",
+        "gain": 62.407594021906334,
+        "split_count": 361,
+        "gain_pct": 0.81
+      },
+      {
+        "feature": "location_tier1_india",
+        "gain": 60.10883607026267,
+        "split_count": 884,
+        "gain_pct": 0.78
+      },
+      {
+        "feature": "profile_views_30d",
+        "gain": 35.58417009718544,
+        "split_count": 909,
+        "gain_pct": 0.46
+      },
+      {
+        "feature": "yoe_reported",
+        "gain": 35.47762989979219,
+        "split_count": 700,
+        "gain_pct": 0.46
+      },
+      {
+        "feature": "willing_to_relocate",
+        "gain": 25.58037428581256,
+        "split_count": 457,
+        "gain_pct": 0.33
+      },
+      {
+        "feature": "notice_period_score",
+        "gain": 24.968986300686517,
+        "split_count": 349,
+        "gain_pct": 0.32
+      },
+      {
+        "feature": "yoe_career_sum",
+        "gain": 19.0860298613759,
+        "split_count": 529,
+        "gain_pct": 0.25
+      },
+      {
+        "feature": "search_appearance_30d",
+        "gain": 18.112100313205364,
+        "split_count": 673,
+        "gain_pct": 0.24
+      },
+      {
+        "feature": "location_is_noida_or_pune",
+        "gain": 17.43554442162225,
+        "split_count": 425,
+        "gain_pct": 0.23
+      },
+      {
+        "feature": "profile_completeness",
+        "gain": 11.681384286430301,
+        "split_count": 712,
+        "gain_pct": 0.15
+      },
+      {
+        "feature": "interview_completion_rate",
+        "gain": 11.353648035972261,
+        "split_count": 497,
+        "gain_pct": 0.15
+      },
+      {
+        "feature": "github_activity_score",
+        "gain": 11.154168719359893,
+        "split_count": 639,
+        "gain_pct": 0.15
+      },
+      {
+        "feature": "notice_period_days",
+        "gain": 10.564458961317502,
+        "split_count": 142,
+        "gain_pct": 0.14
+      },
+      {
+        "feature": "recruiter_response_rate",
+        "gain": 10.015054797309492,
+        "split_count": 478,
+        "gain_pct": 0.13
+      },
+      {
+        "feature": "avg_tenure_months",
+        "gain": 9.971757488278019,
+        "split_count": 603,
+        "gain_pct": 0.13
+      }
+    ],
+    "top_10_vs_bottom_10_diff_top20": [
+      {
+        "feature": "search_appearance_30d",
+        "top_mean": 391.9,
+        "bottom_mean": 157.0,
+        "delta": 234.9
+      },
+      {
+        "feature": "profile_views_30d",
+        "top_mean": 91.4,
+        "bottom_mean": 61.3,
+        "delta": 30.1
+      },
+      {
+        "feature": "github_activity_score",
+        "top_mean": 30.09,
+        "bottom_mean": 13.17,
+        "delta": 16.92
+      },
+      {
+        "feature": "saved_by_recruiters_30d",
+        "top_mean": 23.8,
+        "bottom_mean": 9.4,
+        "delta": 14.4
+      },
+      {
+        "feature": "n_skills",
+        "top_mean": 13.3,
+        "bottom_mean": 9.6,
+        "delta": 3.7
+      },
+      {
+        "feature": "ai_keyword_hits_skills",
+        "top_mean": 5.4,
+        "bottom_mean": 2.4,
+        "delta": 3.0
+      },
+      {
+        "feature": "advanced_skill_count",
+        "top_mean": 4.0,
+        "bottom_mean": 1.8,
+        "delta": 2.2
+      },
+      {
+        "feature": "expert_skill_count",
+        "top_mean": 1.6,
+        "bottom_mean": 0.0,
+        "delta": 1.6
+      },
+      {
+        "feature": "profile_completeness",
+        "top_mean": 68.24,
+        "bottom_mean": 66.84,
+        "delta": 1.4
+      },
+      {
+        "feature": "n_named_jd_skills",
+        "top_mean": 2.6,
+        "bottom_mean": 1.3,
+        "delta": 1.3
+      },
+      {
+        "feature": "ai_skill_count",
+        "top_mean": 2.9,
+        "bottom_mean": 1.6,
+        "delta": 1.3
+      },
+      {
+        "feature": "ai_keyword_hits_career",
+        "top_mean": 3.4,
+        "bottom_mean": 2.3,
+        "delta": 1.1
+      },
+      {
+        "feature": "n_ai_skill_advanced",
+        "top_mean": 1.4,
+        "bottom_mean": 0.5,
+        "delta": 0.9
+      },
+      {
+        "feature": "has_offer_history",
+        "top_mean": 0.8,
+        "bottom_mean": 0.2,
+        "delta": 0.6
+      },
+      {
+        "feature": "n_distinct_industries",
+        "top_mean": 2.3,
+        "bottom_mean": 1.7,
+        "delta": 0.6
+      },
+      {
+        "feature": "endorsement_entropy",
+        "top_mean": 3.205,
+        "bottom_mean": 2.7425,
+        "delta": 0.4625
+      },
+      {
+        "feature": "offer_acceptance_rate",
+        "top_mean": 0.453,
+        "bottom_mean": 0.079,
+        "delta": 0.374
+      },
+      {
+        "feature": "has_shipped_ranking_search_recsys",
+        "top_mean": 0.8,
+        "bottom_mean": 0.5,
+        "delta": 0.3
+      },
+      {
+        "feature": "has_retrieval_ranking_evidence",
+        "top_mean": 0.8,
+        "bottom_mean": 0.5,
+        "delta": 0.3
+      },
+      {
+        "feature": "n_education",
+        "top_mean": 1.6,
+        "bottom_mean": 1.3,
+        "delta": 0.3
+      }
+    ]
+  },
+  "composite": {
+    "score_0_100": 86.22,
+    "score_0_1": 0.8622,
+    "grade": "B",
+    "weights": {
+      "ranking_score": 0.4,
+      "reasoning_score": 0.3,
+      "system_score": 0.2,
+      "audit_score": 0.1
+    },
+    "sub_scores": {
+      "ranking_score": 0.7656,
+      "reasoning_score": 0.92,
+      "system_score": 0.9,
+      "audit_score": 1.0
+    },
+    "sub_scores_weighted": {
+      "ranking_score": 0.3062,
+      "reasoning_score": 0.276,
+      "system_score": 0.18,
+      "audit_score": 0.1
+    }
+  }
+}

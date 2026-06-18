@@ -1,0 +1,75 @@
+# Per-JD query synonyms (WS-7).
+#
+# Each key is a term that may appear in the job description; each value is a
+# list of synonyms to append to the dense-retriever query. We use the
+# original text for BM25 (BM25 doesn't benefit from query-expansion noise)
+# and the expanded text for the dense encoder (it embeds whole sentences).
+#
+# Keep this map small + high-signal. Each synonym is a potential false
+# positive at scale.
+synonyms:
+  embeddings:
+    - vector search
+    - semantic search
+    - sentence transformers
+    - dense retrieval
+    - representation learning
+  ranking:
+    - learning to rank
+    - lambdarank
+    - ltr
+    - reranker
+    - learning-to-rank
+  rerank:
+    - cross-encoder
+    - reranker
+    - monoBERT
+    - monoT5
+  llm:
+    - large language model
+    - language model
+    - generative model
+    - decoder
+  fine-tuning:
+    - lora
+    - qlora
+    - peft
+    - rlhf
+    - instruction tuning
+    - sft
+  rag:
+    - retrieval augmented generation
+    - retrieval-augmented
+    - grounded generation
+    - grounded llm
+  retrieval:
+    - search
+    - faiss
+    - elasticsearch
+    - vector store
+    - vector database
+    - ann
+  recommender:
+    - recommendation system
+    - two-tower
+    - collaborative filtering
+    - matching
+  ml platform:
+    - feature store
+    - model serving
+    - model registry
+    - mlops
+    - inference platform
+  eval:
+    - evaluation harness
+    - offline evaluation
+    - online evaluation
+    - ab test
+    - a/b test
+  distributed:
+    - spark
+    - kafka
+    - ray
+    - kubernetes
+    - microservices
+    - grpc
