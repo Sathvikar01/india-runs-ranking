@@ -20,7 +20,10 @@ if str(REPO_ROOT) not in sys.path:
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--candidates", default="data/raw/candidates_5k.jsonl")
+    p.add_argument("--candidates", default="data/raw/candidates_5k.jsonl",
+                   help="JSONL to use as the candidate pool (ground-truth source). "
+                        "If --csv contains ids from a larger pool, the bench "
+                        "automatically scopes the ground truth to the CSV's ids.")
     p.add_argument("--csv", default=None,
                    help="CSV to score; default = newest outputs/dry_run/*.csv")
     p.add_argument("--out", default="reports/bench.md")
@@ -46,6 +49,18 @@ def main() -> int:
     from src.evaluation.jd_literal_rubric import build_jd_literal_ground_truth
 
     cands = load_candidates(args.candidates)
+    csv_ids = _read_csv_ids(csv_path)
+    cand_ids = {c.candidate_id for c in cands}
+    if csv_ids and not csv_ids.issubset(cand_ids):
+        missing = len(csv_ids - cand_ids)
+        log_msg = (
+            f"Warning: {missing}/{len(csv_ids)} ids in the CSV are not in the "
+            f"candidate pool ({args.candidates}). The bench will report a lower "
+            f"ranking_score than the ranker actually achieves. Use --candidates "
+            f"with the matching pool (e.g. data/raw/candidates.jsonl)."
+        )
+        print(log_msg)
+
     proxy = build_proxy_ground_truth(cands)
     eval_ = build_eval_ground_truth(cands)
     jd_literal = build_jd_literal_ground_truth(cands)
@@ -111,6 +126,18 @@ def _find_newest_dry_run() -> Path:
     if not candidates:
         return REPO_ROOT / "outputs" / "team_xxx.csv"
     return candidates[-1]
+
+
+def _read_csv_ids(path: Path) -> set[str]:
+    """Return the set of candidate_ids in a ranker-output CSV."""
+    import csv as _csv
+    out: set[str] = set()
+    with path.open("r", encoding="utf-8", newline="") as f:
+        for row in _csv.DictReader(f):
+            cid = row.get("candidate_id")
+            if cid:
+                out.add(cid)
+    return out
 
 
 def _write_random_baseline(candidates_path: str | Path) -> Path:
