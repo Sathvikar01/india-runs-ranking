@@ -1,11 +1,19 @@
 """Final ensemble: combine LTR, behavioral, honeypot penalty, and JD penalty
 into a single 0-1 score and produce a strictly monotonically non-increasing
 score list over the final top-100.
-"""
 
+Agent 7 update: the ensemble weights are now configurable via
+``EnsembleWeights``. ``search_ensemble_weights.py`` runs a Bayesian /
+coordinate-descent search over the dev split to find weights that
+maximise min(proxy, eval_rubric). The best weights are saved to
+``artifacts/best_ensemble_weights.json``.
+"""
 from __future__ import annotations
 
+import json
 import math
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 import numpy as np
 
@@ -13,6 +21,40 @@ from src.api.schemas import Candidate
 from src.behavioral.availability import availability_score
 from src.behavioral.honeypot import honeypot_risk
 from src.behavioral.jd_filters import negative_penalty, positive_boost
+
+
+@dataclass
+class EnsembleWeights:
+    """Configurable weights for the final ensemble.
+
+    Defaults match the original hard-coded ensemble so existing call sites
+    keep the same behaviour unless they explicitly load new weights.
+    """
+
+    w_ltr: float = 0.55
+    w_ce: float = 0.20
+    w_avail: float = 0.10
+    w_positive: float = 0.10
+    w_negative: float = 0.10       # subtracted
+    w_honeypot: float = 0.20       # subtracted
+    w_catboost: float = 0.0        # optional extra head
+    w_multitask: float = 0.0       # optional multi-task LTR head (Agent 1)
+    w_topk: float = 0.0            # optional top-K reranker head (Agent 3)
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self), indent=2)
+
+    @classmethod
+    def from_json(cls, s: str) -> "EnsembleWeights":
+        d = json.loads(s)
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+    def save(self, path: str | Path) -> None:
+        Path(path).write_text(self.to_json(), encoding="utf-8")
+
+    @classmethod
+    def load(cls, path: str | Path) -> "EnsembleWeights":
+        return cls.from_json(Path(path).read_text(encoding="utf-8"))
 
 
 def _sigmoid(x: float) -> float:
@@ -39,21 +81,55 @@ def ensemble_score(
 ) -> float:
     """Combine signals into a single 0-1 score. Higher is better.
 
-    WS-6: a small additive CatBoost signal is now part of the ensemble.
-    `catboost_score` is expected to be in roughly the same scale as the
-    LTR sigmoid term. We add `catboost_weight * sigmoid(catboost_score)` to
-    the base, capped at 1.0.
+    Backwards-compatible signature; new code should call
+    ``ensemble_score_v2`` with an ``EnsembleWeights`` instance.
+    """
+    weights = EnsembleWeights(w_catboost=catboost_weight)
+    return ensemble_score_v2(
+        ltr_score=ltr_score, ce_score=ce_score,
+        availability=availability, positive=positive, negative=negative,
+        honeypot=honeypot,
+        catboost_score=catboost_score,
+        weights=weights,
+    )
+
+
+def ensemble_score_v2(
+    ltr_score: float,
+    ce_score: float,
+    availability: float,
+    positive: float,
+    negative: float,
+    honeypot: float,
+    weights: EnsembleWeights,
+    catboost_score: float = 0.0,
+    multitask_score: float = 0.0,
+    topk_score: float = 0.0,
+) -> float:
+    """Combine signals into a single 0-1 score using ``EnsembleWeights``.
+
+    Each signal is normalised to [0, 1] before being weighted. Negative
+    weights subtract (honeypot, negative JD penalty). The result is
+    clipped to [0, 1].
+
+    New heads (multitask, topk) start at weight 0; the grid-search
+    (``scripts/search_ensemble_weights.py``) sets them based on dev
+    performance.
     """
     base = (
-        0.55 * _sigmoid(ltr_score)
-        + 0.20 * _sigmoid(ce_score)
-        + 0.10 * _clip01(availability)
-        + 0.10 * _clip01(positive)
-        - 0.10 * _clip01(negative)
-        - 0.20 * _clip01(honeypot)
+        weights.w_ltr * _sigmoid(ltr_score)
+        + weights.w_ce * _sigmoid(ce_score)
+        + weights.w_avail * _clip01(availability)
+        + weights.w_positive * _clip01(positive)
+        - weights.w_negative * _clip01(negative)
+        - weights.w_honeypot * _clip01(honeypot)
     )
-    if catboost_weight > 0.0:
-        base = base + catboost_weight * _sigmoid(catboost_score)
+    if weights.w_catboost > 0.0 and catboost_score != 0.0:
+        base = base + weights.w_catboost * _sigmoid(catboost_score)
+    if weights.w_multitask > 0.0 and multitask_score != 0.0:
+        base = base + weights.w_multitask * _sigmoid(multitask_score)
+    if weights.w_topk > 0.0 and topk_score != 0.0:
+        base = base + weights.w_topk * topk_score  # already in 0-1
     return _clip01(base)
 
 
