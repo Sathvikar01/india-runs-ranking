@@ -46,49 +46,72 @@ log = logging.getLogger("search_ensemble")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 
+def _precompute_signals(
+    candidates: list,
+    ltr_scores: np.ndarray,
+    ce_scores: np.ndarray,
+) -> dict:
+    """Precompute per-candidate signals so the inner loop is just numpy."""
+    log.info("Precomputing per-candidate signals for %d candidates …", len(candidates))
+    n = len(candidates)
+    signals = {
+        "ltr_sigmoid": 1.0 / (1.0 + np.exp(-ltr_scores)),
+        "ce_sigmoid": 1.0 / (1.0 + np.exp(-ce_scores)),
+        "avail": np.zeros(n, dtype=np.float32),
+        "positive": np.zeros(n, dtype=np.float32),
+        "negative": np.zeros(n, dtype=np.float32),
+        "honeypot": np.zeros(n, dtype=np.float32),
+        "proxy_truth": np.zeros(n, dtype=np.float32),
+        "eval_truth": np.zeros(n, dtype=np.float32),
+    }
+    for i, c in enumerate(candidates):
+        signals["avail"][i] = float(availability_score(c))
+        signals["positive"][i] = float(positive_boost(c))
+        signals["negative"][i] = float(negative_penalty(c))
+        signals["honeypot"][i] = float(honeypot_risk(c))
+        signals["proxy_truth"][i] = float(proxy_relevance(c))
+        signals["eval_truth"][i] = float(eval_relevance(c))
+    return signals
+
+
+def _eval_composite_fast(signals: dict, weights: EnsembleWeights) -> tuple[float, float, float]:
+    """Vectorised scoring: ~100x faster than the per-candidate version."""
+    base = (
+        weights.w_ltr * signals["ltr_sigmoid"]
+        + weights.w_ce * signals["ce_sigmoid"]
+        + weights.w_avail * np.clip(signals["avail"], 0, 1)
+        + weights.w_positive * np.clip(signals["positive"], 0, 1)
+        - weights.w_negative * np.clip(signals["negative"], 0, 1)
+        - weights.w_honeypot * np.clip(signals["honeypot"], 0, 1)
+    )
+    base = np.clip(base, 0, 1)
+    order = np.argsort(-base, kind="stable")
+    top = order[:100]
+    proxy_rels = signals["proxy_truth"][top]
+    eval_rels = signals["eval_truth"][top]
+
+    def _comp(rels):
+        rels = rels.tolist()
+        n10 = ndcg_at_k(rels, 10)
+        n50 = ndcg_at_k(rels, 50)
+        m = average_precision(rels)
+        p10 = sum(1 for r in rels[:10] if r >= 3.0) / 10
+        return 0.50 * n10 + 0.30 * n50 + 0.15 * m + 0.05 * p10
+
+    proxy_comp = _comp(proxy_rels)
+    eval_comp = _comp(eval_rels)
+    return proxy_comp, eval_comp, min(proxy_comp, eval_comp)
+
+
 def _eval_composite(
     candidates: list,
     ltr_scores: np.ndarray,
     ce_scores: np.ndarray,
     weights: EnsembleWeights,
 ) -> tuple[float, float, float]:
-    """Return (proxy_composite, eval_rubric_composite, min)."""
-    scored = []
-    proxy_truth = {}
-    eval_truth = {}
-    for i, c in enumerate(candidates):
-        s = ensemble_score_v2(
-            ltr_score=float(ltr_scores[i]),
-            ce_score=float(ce_scores[i]),
-            availability=availability_score(c),
-            positive=positive_boost(c),
-            negative=negative_penalty(c),
-            honeypot=honeypot_risk(c),
-            weights=weights,
-        )
-        scored.append(s)
-        proxy_truth[c.candidate_id] = proxy_relevance(c)
-        eval_truth[c.candidate_id] = eval_relevance(c)
-    scored = np.asarray(scored)
-
-    # Build top-100 ordering (with tiebreak by id).
-    order = np.argsort(-scored, kind="stable")
-    top = order[:100]
-    proxy_rels = [proxy_truth[candidates[int(i)].candidate_id] for i in top]
-    eval_rels = [eval_truth[candidates[int(i)].candidate_id] for i in top]
-    proxy_n10 = ndcg_at_k(proxy_rels, 10)
-    proxy_n50 = ndcg_at_k(proxy_rels, 50)
-    proxy_map = average_precision(proxy_rels)
-    proxy_p10 = sum(1 for r in proxy_rels[:10] if r >= 3.0) / 10
-    proxy_comp = 0.50 * proxy_n10 + 0.30 * proxy_n50 + 0.15 * proxy_map + 0.05 * proxy_p10
-
-    eval_n10 = ndcg_at_k(eval_rels, 10)
-    eval_n50 = ndcg_at_k(eval_rels, 50)
-    eval_map = average_precision(eval_rels)
-    eval_p10 = sum(1 for r in eval_rels[:10] if r >= 3.0) / 10
-    eval_comp = 0.50 * eval_n10 + 0.30 * eval_n50 + 0.15 * eval_map + 0.05 * eval_p10
-
-    return proxy_comp, eval_comp, min(proxy_comp, eval_comp)
+    """Backwards-compatible per-candidate evaluator (slow path)."""
+    signals = _precompute_signals(candidates, ltr_scores, ce_scores)
+    return _eval_composite_fast(signals, weights)
 
 
 def _main_loop(args) -> int:
@@ -108,13 +131,12 @@ def _main_loop(args) -> int:
     ], dtype=np.float32)
     ce_scores = rng.normal(0, 1, size=len(candidates)).astype(np.float32)
 
+    signals = _precompute_signals(candidates, ltr_scores, ce_scores)
     log.info("Coordinate-descent search over %d weights × %d candidates each …",
              len(args.grid), len(candidates))
 
     weights = EnsembleWeights()
-    base_proxy, base_eval, base_min = _eval_composite(
-        candidates, ltr_scores, ce_scores, weights,
-    )
+    base_proxy, base_eval, base_min = _eval_composite_fast(signals, weights)
     log.info("baseline: proxy=%.4f eval=%.4f min=%.4f", base_proxy, base_eval, base_min)
 
     history: list[dict] = [{"round": 0, "min": base_min, "weights": weights.__dict__.copy()}]
@@ -129,18 +151,14 @@ def _main_loop(args) -> int:
             best_min = base_min
             for v in args.grid:
                 setattr(weights, name, v)
-                p, e, m = _eval_composite(
-                    candidates, ltr_scores, ce_scores, weights,
-                )
+                _, _, m = _eval_composite_fast(signals, weights)
                 if m > best_min + 1e-5:
                     best_min = m
                     best_v = v
             setattr(weights, name, best_v)
             if best_v != cur:
                 improved = True
-                p, e, m = _eval_composite(
-                    candidates, ltr_scores, ce_scores, weights,
-                )
+                _, _, m = _eval_composite_fast(signals, weights)
                 log.info("  round %d: %s %s -> %s (min %.4f)",
                          round_idx, name, cur, best_v, m)
                 base_min = m
