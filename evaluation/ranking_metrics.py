@@ -58,28 +58,39 @@ def ranking_score(
     csv_path: str | Path,
     proxy_relevance: dict[str, float],
     eval_relevance: dict[str, float],
+    jd_literal_relevance: dict[str, float] | None = None,
 ) -> dict:
-    """Compute ranking metrics against both ground truths and the
+    """Compute ranking metrics against two (or three) ground truths and the
     `ranking_score` used in the composite.
 
-    Returns a dict with per-metric scores for both, plus the
-    `ranking_score_0_1` (the minimum, defending against proxy-overfit).
+    Returns a dict with per-metric scores for each ground truth, plus
+    `ranking_score_0_1` — the *minimum* of all available composites,
+    defending against overfit to any single ground truth.
+
+    Agent 9 update: when ``jd_literal_relevance`` is provided, the
+    ranking_score is the minimum of all three. The ``jd_literal`` entry
+    surfaces the spread so a regression in any one rubric is visible.
     """
     proxy = compute_metrics(csv_path, proxy_relevance)
     eval_ = compute_metrics(csv_path, eval_relevance)
     proxy_composite = sum(COMPOSITE_WEIGHTS[k] * proxy.get(k, 0.0) for k in COMPOSITE_WEIGHTS)
     eval_composite = sum(COMPOSITE_WEIGHTS[k] * eval_.get(k, 0.0) for k in COMPOSITE_WEIGHTS)
-    # The ranking_score is the *minimum* of the two. We want to know how
-    # well the ranker does against the harder ground truth.
-    ranking_score_0_1 = min(proxy_composite, eval_composite)
-    return {
+    composites = [proxy_composite, eval_composite]
+    out = {
         "proxy": proxy,
         "proxy_composite": round(proxy_composite, 4),
         "eval_rubric": eval_,
         "eval_rubric_composite": round(eval_composite, 4),
-        "ranking_score_0_1": round(ranking_score_0_1, 4),
         "composite_weights": COMPOSITE_WEIGHTS,
     }
+    if jd_literal_relevance is not None:
+        jd = compute_metrics(csv_path, jd_literal_relevance)
+        jd_composite = sum(COMPOSITE_WEIGHTS[k] * jd.get(k, 0.0) for k in COMPOSITE_WEIGHTS)
+        composites.append(jd_composite)
+        out["jd_literal"] = jd
+        out["jd_literal_composite"] = round(jd_composite, 4)
+    out["ranking_score_0_1"] = round(min(composites), 4)
+    return out
 
 
 def write_ranking_metrics_csv(
@@ -87,14 +98,19 @@ def write_ranking_metrics_csv(
     proxy_relevance: dict[str, float],
     eval_relevance: dict[str, float],
     out_path: str | Path,
+    jd_literal_relevance: dict[str, float] | None = None,
 ) -> None:
-    """Write a 2-row CSV: one row per ground truth, with NDCG@K, MAP, P@K, MRR."""
+    """Write a CSV with one row per ground truth (proxy, eval_rubric,
+    optionally jd_literal), with NDCG@K, MAP, P@K, MRR."""
     proxy = compute_metrics(csv_path, proxy_relevance)
     eval_ = compute_metrics(csv_path, eval_relevance)
     rows = [
         {"ground_truth": "proxy", **proxy},
         {"ground_truth": "eval_rubric", **eval_},
     ]
+    if jd_literal_relevance is not None:
+        jd = compute_metrics(csv_path, jd_literal_relevance)
+        rows.append({"ground_truth": "jd_literal", **jd})
     fields = sorted({k for r in rows for k in r})
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)

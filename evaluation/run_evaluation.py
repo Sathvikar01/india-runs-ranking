@@ -87,18 +87,26 @@ def _run_ranker(candidates: Path, jd: Path, artifacts: Path, out: Path) -> dict:
     }
 
 
-def _build_ground_truths(candidates: Path) -> tuple[dict, dict]:
-    """Build proxy + eval-rubric ground truths over the candidate pool."""
+def _build_ground_truths(candidates: Path) -> tuple[dict, dict, dict]:
+    """Build proxy + eval-rubric + jd-literal ground truths over the pool.
+
+    Agent 9: the third rubric catches regressions that proxy-overfit hides.
+    """
     from src.evaluation.eval_rubric import build_eval_ground_truth
     from src.evaluation.proxy_ground_truth import build_proxy_ground_truth
+    from src.evaluation.jd_literal_rubric import build_jd_literal_ground_truth
 
     from evaluation.ranking_metrics import load_candidates
 
     cands = load_candidates(candidates)
     proxy = build_proxy_ground_truth(cands)
     eval_ = build_eval_ground_truth(cands)
-    log.info("Built ground truths: %d proxy, %d eval", len(proxy), len(eval_))
-    return proxy, eval_
+    jd_literal = build_jd_literal_ground_truth(cands)
+    log.info(
+        "Built ground truths: %d proxy, %d eval, %d jd_literal",
+        len(proxy), len(eval_), len(jd_literal),
+    )
+    return proxy, eval_, jd_literal
 
 
 def _audit_score(csv_path: Path, candidates: Path) -> dict:
@@ -116,10 +124,14 @@ def _audit_score(csv_path: Path, candidates: Path) -> dict:
     }
 
 
-def _ranking_score_block(csv_path: Path, proxy: dict, eval_: dict) -> dict:
-    rs = compute_ranking_score(csv_path, proxy, eval_)
+def _ranking_score_block(csv_path: Path, proxy: dict, eval_: dict,
+                        jd_literal: dict | None = None) -> dict:
+    rs = compute_ranking_score(csv_path, proxy, eval_, jd_literal)
     # Write the per-metric CSV.
-    write_ranking_metrics_csv(csv_path, proxy, eval_, RESULTS_DIR / "ranking_metrics.csv")
+    write_ranking_metrics_csv(
+        csv_path, proxy, eval_,
+        RESULTS_DIR / "ranking_metrics.csv", jd_literal,
+    )
     return rs
 
 
@@ -214,10 +226,10 @@ def main() -> int:
         out_path = Path(ranker_meta["output_path"])
 
     # 2. Build ground truths.
-    proxy, eval_ = _build_ground_truths(candidates)
+    proxy, eval_, jd_literal = _build_ground_truths(candidates)
 
     # 3. Ranking score.
-    ranking = _ranking_score_block(out_path, proxy, eval_)
+    ranking = _ranking_score_block(out_path, proxy, eval_, jd_literal)
 
     # 4. Reasoning score (audit).
     audit = _audit_score(out_path, candidates)
