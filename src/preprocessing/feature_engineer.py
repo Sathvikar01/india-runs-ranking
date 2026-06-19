@@ -472,6 +472,387 @@ def _recency_score(last_active: str | None, today: date) -> float:
     return 0.0
 
 
+# ---------------------------------------------------------------------------
+# Feature zoo v2 (Agent 5) — additional discriminative features added to
+# the build_features dict and to feature_columns(). These split the LTR's
+# 83% single-feature dependency on `ai_keyword_hits_career` into 30+ smaller,
+# mutually-correlated signals so the LightGBM tree has more splits to work
+# with when ordering the top-K.
+# ---------------------------------------------------------------------------
+
+
+def _n_ai_roles(c: Candidate) -> int:
+    """Count of roles at AI/ML companies (industry == ai/ml)."""
+    n = 0
+    for r in c.career_history:
+        if (r.industry or "").lower() == "ai/ml":
+            n += 1
+    return n
+
+
+def _n_senior_roles(c: Candidate) -> int:
+    """Count of senior / staff / manager roles."""
+    n = 0
+    for r in c.career_history:
+        t = (r.title or "").lower()
+        if any(k in t for k in ("senior", "staff", "principal", "manager", "lead", "head")):
+            n += 1
+    return n
+
+
+def _n_product_roles(c: Candidate) -> int:
+    """Count of roles at product companies (not consulting / outsourcing)."""
+    return _product_company_count(c)
+
+
+def _n_india_roles(c: Candidate) -> int:
+    """Count of roles based in India (location or country indicator)."""
+    n = 0
+    for r in c.career_history:
+        loc = (r.title or "") + " " + (r.description or "")
+        if is_india(loc) or any(
+            city in loc.lower()
+            for city in ("bangalore", "bengaluru", "hyderabad", "pune", "noida", "delhi", "mumbai", "chennai")
+        ):
+            n += 1
+    return n
+
+
+def _avg_role_duration_months(c: Candidate) -> float:
+    """Average role duration in months across all roles."""
+    if not c.career_history:
+        return 0.0
+    durs = [r.duration_months for r in c.career_history if r.duration_months and r.duration_months > 0]
+    return float(sum(durs) / len(durs)) if durs else 0.0
+
+
+def _max_role_duration_months(c: Candidate) -> float:
+    """Longest role duration in months (loyalty signal)."""
+    if not c.career_history:
+        return 0.0
+    durs = [r.duration_months for r in c.career_history if r.duration_months and r.duration_months > 0]
+    return float(max(durs)) if durs else 0.0
+
+
+def _tenure_variance(c: Candidate) -> float:
+    """Variance of role durations (high = job hopper, low = stable)."""
+    if not c.career_history:
+        return 0.0
+    durs = [r.duration_months for r in c.career_history if r.duration_months and r.duration_months > 0]
+    if len(durs) < 2:
+        return 0.0
+    mean = sum(durs) / len(durs)
+    return float(sum((d - mean) ** 2 for d in durs) / len(durs))
+
+
+def _career_progression_slope(c: Candidate) -> float:
+    """Linear slope of role-seniority over time. Positive = growth pattern.
+
+    Roles are ordered from oldest to newest; we map each role's title to
+    a seniority bucket (0..5) and compute the slope of that line vs
+    chronological order. Stable senior roles give a flat ~0; a Junior →
+    Senior pattern over 7 years gives a strong positive slope.
+    """
+    if not c.career_history or len(c.career_history) < 2:
+        return 0.0
+    # Use chronological order (career_history is newest-first; reverse).
+    roles = list(reversed(c.career_history))
+    xs: list[int] = []
+    ys: list[float] = []
+    for i, r in enumerate(roles):
+        bucket = _SENIORITY_BUCKET_INDEX.get(title_seniority_bucket(r.title or ""), 2)
+        xs.append(i)
+        ys.append(float(bucket))
+    n = len(xs)
+    if n < 2:
+        return 0.0
+    sx = sum(xs)
+    sy = sum(ys)
+    sxx = sum(x * x for x in xs)
+    sxy = sum(x * y for x, y in zip(xs, ys, strict=True))
+    denom = n * sxx - sx * sx
+    if denom == 0:
+        return 0.0
+    return float((n * sxy - sx * sy) / denom)
+
+
+def _current_role_tenure_months(c: Candidate) -> float:
+    """Months in the current (most-recent) role. Long tenure = stable."""
+    if not c.career_history:
+        return 0.0
+    cur = c.career_history[0]
+    return float(cur.duration_months or 0)
+
+
+def _n_career_gaps(c: Candidate) -> int:
+    """Number of gaps > 6 months between consecutive roles."""
+    if not c.career_history or len(c.career_history) < 2:
+        return 0
+    # career_history is newest-first; walk oldest-first.
+    roles = list(reversed(c.career_history))
+    gaps = 0
+    for i in range(1, len(roles)):
+        prev = roles[i - 1]
+        cur = roles[i]
+        # Compare end_date of prev role with start_date of cur role.
+        if prev.end_date and cur.start_date:
+            try:
+                p_end = datetime.strptime(prev.end_date, "%Y-%m-%d").date()
+                c_start = datetime.strptime(cur.start_date, "%Y-%m-%d").date()
+                gap_days = (c_start - p_end).days
+                if gap_days > 180:
+                    gaps += 1
+            except (ValueError, TypeError):
+                continue
+    return gaps
+
+
+def _jd_skill_match_count(c: Candidate, career: str, skills_text: str) -> int:
+    """Count of JD-named skills found in the candidate's career + skills text."""
+    blob = (career + " " + skills_text).lower()
+    return sum(1 for s in JD_NAMED_SKILLS if s in blob)
+
+
+def _jd_skill_match_expert_count(c: Candidate) -> int:
+    """Count of JD-named skills at 'expert' proficiency on the profile."""
+    n = 0
+    blob = " ".join((sk.name or "").lower() for sk in c.skills)
+    for s in JD_NAMED_SKILLS:
+        if s in blob:
+            # Check if any of the matching skills is at expert level.
+            for sk in c.skills:
+                if s in (sk.name or "").lower() and sk.proficiency == "expert":
+                    n += 1
+                    break
+    return n
+
+
+def _jd_keyword_count_career(career: str) -> int:
+    """Count of JD-aligned keywords in the candidate's career text."""
+    keys = (
+        "embedding", "retrieval", "ranking", "ranker", "rerank", "rag",
+        "fine-tun", "lora", "peft", "rlhf", "transformer", "pytorch",
+        "vector search", "semantic search", "learning to rank", "lambdarank",
+        "sentence-transformer", "faiss", "elasticsearch", "pinecone", "weaviate",
+    )
+    blob = (career or "").lower()
+    return sum(min(3, blob.count(k)) for k in keys)
+
+
+def _jd_keyword_count_summary(c: Candidate) -> int:
+    """Count of JD-aligned keywords in the candidate's profile summary."""
+    keys = (
+        "embedding", "retrieval", "ranking", "rag", "fine-tun", "lora",
+        "transformer", "pytorch", "vector search", "semantic search",
+    )
+    blob = (c.profile.summary or "").lower()
+    return sum(min(3, blob.count(k)) for k in keys)
+
+
+def _title_jd_match(c: Candidate) -> int:
+    """1 if the current title matches JD-aligned keywords."""
+    t = (c.profile.current_title or "").lower()
+    keys = ("ml", "ai", "machine learning", "data scientist", "nlp", "llm")
+    return int(any(k in t for k in keys))
+
+
+def _seniority_jd_match(c: Candidate) -> int:
+    """1 if YOE is in the JD's 5-9 band (the ideal band)."""
+    yoe = float(c.profile.years_of_experience or 0.0)
+    return int(5 <= yoe <= 9)
+
+
+def _location_jd_match(c: Candidate) -> int:
+    """1 if location is preferred OR willing to relocate from a tier-1 city."""
+    if is_preferred_location(c.profile.location):
+        return 1
+    if is_tier1_india(c.profile.country, c.profile.location) and c.redrob_signals.willing_to_relocate:
+        return 1
+    return 0
+
+
+def _industry_jd_match(c: Candidate) -> int:
+    """1 if current industry is AI/ML."""
+    return int(normalize_industry(c.profile.current_industry) == "ai_ml")
+
+
+def _engagement_intensity(c: Candidate) -> float:
+    """Composite engagement: profile_views + search + saved (log-scaled)."""
+    s = c.redrob_signals
+    return float(
+        safe_log1p(s.profile_views_received_30d)
+        + safe_log1p(s.search_appearance_30d)
+        + safe_log1p(s.saved_by_recruiters_30d)
+    )
+
+
+def _log_profile_views_30d(c: Candidate) -> float:
+    return safe_log1p(c.redrob_signals.profile_views_received_30d)
+
+
+def _log_search_appearance_30d(c: Candidate) -> float:
+    return safe_log1p(c.redrob_signals.search_appearance_30d)
+
+
+def _log_saved_by_recruiters_30d(c: Candidate) -> float:
+    return safe_log1p(c.redrob_signals.saved_by_recruiters_30d)
+
+
+def _log_connection_count(c: Candidate) -> float:
+    return safe_log1p(c.redrob_signals.connection_count)
+
+
+def _log_endorsements_received(c: Candidate) -> float:
+    return safe_log1p(c.redrob_signals.endorsements_received)
+
+
+def _behavioral_risk_score(c: Candidate) -> float:
+    """Composite behavioral risk. Higher = riskier to hire.
+
+    Combines: very long notice period, no offer history, low recruiter
+    response, profile_views = 0, no endorsements, no verifications.
+    Each component is in [0, 1]; the sum is clipped to [0, 1].
+    """
+    s = c.redrob_signals
+    risk = 0.0
+    # Long notice period (>90d) is a strong no-hire signal in India.
+    if s.notice_period_days > 90:
+        risk += 0.30
+    elif s.notice_period_days > 60:
+        risk += 0.15
+    # No offer history → unknown past behavior.
+    if s.offer_acceptance_rate < 0:
+        risk += 0.15
+    # Very low recruiter response.
+    if s.recruiter_response_rate < 0.10:
+        risk += 0.15
+    # No profile views in 30d → invisible.
+    if s.profile_views_received_30d <= 0:
+        risk += 0.10
+    # No verifications.
+    if not s.verified_email:
+        risk += 0.10
+    if not s.verified_phone:
+        risk += 0.10
+    if not s.linkedin_connected:
+        risk += 0.05
+    return min(1.0, risk)
+
+
+def _availability_composite(c: Candidate) -> float:
+    """Composite availability: positive signals only. In [0, 1]."""
+    s = c.redrob_signals
+    pos = 0.0
+    if s.open_to_work_flag:
+        pos += 0.25
+    if s.willing_to_relocate:
+        pos += 0.10
+    if s.notice_period_days <= 30:
+        pos += 0.20
+    elif s.notice_period_days <= 60:
+        pos += 0.10
+    if s.recruiter_response_rate >= 0.5:
+        pos += 0.15
+    elif s.recruiter_response_rate >= 0.3:
+        pos += 0.05
+    if s.last_active_date:
+        days = _days_ago(s.last_active_date, date.today())
+        if days is not None and days <= 30:
+            pos += 0.15
+        elif days is not None and days <= 90:
+            pos += 0.08
+    if s.profile_completeness_score >= 80:
+        pos += 0.05
+    if s.offer_acceptance_rate >= 0.5:
+        pos += 0.10
+    return min(1.0, pos)
+
+
+def _expert_share(c: Candidate) -> float:
+    """Share of skills at 'expert' level. In [0, 1]."""
+    if not c.skills:
+        return 0.0
+    return sum(1 for sk in c.skills if sk.proficiency == "expert") / len(c.skills)
+
+
+def _advanced_or_expert_share(c: Candidate) -> float:
+    """Share of skills at advanced+expert level."""
+    if not c.skills:
+        return 0.0
+    return sum(1 for sk in c.skills if sk.proficiency in ("advanced", "expert")) / len(c.skills)
+
+
+def _skill_endorsement_mean(c: Candidate) -> float:
+    """Mean endorsement count per skill. In [0, +∞)."""
+    if not c.skills:
+        return 0.0
+    return float(sum(sk.endorsements for sk in c.skills) / len(c.skills))
+
+
+def _skill_endorsement_max(c: Candidate) -> float:
+    """Max endorsement count on any single skill."""
+    if not c.skills:
+        return 0.0
+    return float(max(sk.endorsements for sk in c.skills))
+
+
+def _skill_count_log(c: Candidate) -> float:
+    """log(1 + n_skills)."""
+    return safe_log1p(len(c.skills))
+
+
+def _has_product_company_recent(c: Candidate) -> int:
+    """1 if current or most-recent role is at a product company."""
+    if not c.career_history:
+        return 0
+    return int((c.career_history[0].industry or "").lower() in (
+        "ai/ml", "saas", "fintech", "ecommerce", "edtech", "adtech", "gaming",
+    ))
+
+
+def _title_yoe_in_band(c: Candidate) -> int:
+    """1 if title bucket matches YOE band (no title/YOE mismatch)."""
+    yoe = float(c.profile.years_of_experience or 0.0)
+    actual = _SENIORITY_BUCKET_INDEX.get(
+        title_seniority_bucket(c.profile.current_title or ""), 2
+    )
+    expected = _expected_seniority_for_yoe(yoe)
+    return int(abs(expected - actual) <= 1)
+
+
+def _seniority_distance_from_ideal(c: Candidate) -> float:
+    """Absolute distance from the JD's 5-9 ideal band, in years."""
+    yoe = float(c.profile.years_of_experience or 0.0)
+    if 5 <= yoe <= 9:
+        return 0.0
+    if yoe < 5:
+        return 5.0 - yoe
+    return yoe - 9.0
+
+
+def _ai_skill_count_log(c: Candidate) -> float:
+    """log(1 + count of AI-related skills on profile)."""
+    ai_skills = {
+        "pytorch", "tensorflow", "transformers", "scikit-learn", "sklearn",
+        "numpy", "pandas", "jax", "keras", "huggingface",
+    }
+    n = sum(1 for sk in c.skills if (sk.name or "").lower() in ai_skills)
+    return safe_log1p(n)
+
+
+def _career_jd_sim_proxy(c: Candidate) -> float:
+    """Cheap proxy for career_JD semantic similarity without an embedder.
+
+    Counts the number of unique JD-named keywords found in the career text,
+    normalised by the number of JD-named skills. In [0, 1].
+    """
+    blob = (build_career_text(c) or "").lower()
+    hits = sum(1 for s in JD_NAMED_SKILLS if s in blob)
+    return min(1.0, hits / max(1, len(JD_NAMED_SKILLS) // 3))
+
+
+
+
 def build_features(c: Candidate, today: date | None = None) -> dict[str, Any]:
     """Build the per-candidate feature dict.
 
@@ -653,6 +1034,51 @@ def build_features(c: Candidate, today: date | None = None) -> dict[str, Any]:
         "search_appearance_30d": s.search_appearance_30d,
         "saved_by_recruiters_30d": s.saved_by_recruiters_30d,
         "github_activity_score": max(0.0, s.github_activity_score),
+
+        # ------------------------------------------------------------------
+        # Feature zoo v2 (Agent 5): career-shape + JD-literal + behavioral.
+        # ------------------------------------------------------------------
+        # Career shape
+        "n_ai_roles": _n_ai_roles(c),
+        "n_senior_roles": _n_senior_roles(c),
+        "n_product_roles": _n_product_roles(c),
+        "n_india_roles": _n_india_roles(c),
+        "avg_role_duration_months": _avg_role_duration_months(c),
+        "max_role_duration_months": _max_role_duration_months(c),
+        "tenure_variance": _tenure_variance(c),
+        "career_progression_slope": _career_progression_slope(c),
+        "current_role_tenure_months": _current_role_tenure_months(c),
+        "n_career_gaps": _n_career_gaps(c),
+        # JD-literal match
+        "jd_skill_match_count": _jd_skill_match_count(c, career, skills_text),
+        "jd_skill_match_expert_count": _jd_skill_match_expert_count(c),
+        "jd_keyword_count_career": _jd_keyword_count_career(career),
+        "jd_keyword_count_summary": _jd_keyword_count_summary(c),
+        "title_jd_match": _title_jd_match(c),
+        "seniority_jd_match": _seniority_jd_match(c),
+        "location_jd_match": _location_jd_match(c),
+        "industry_jd_match": _industry_jd_match(c),
+        "has_product_company_recent": _has_product_company_recent(c),
+        "career_jd_sim_proxy": _career_jd_sim_proxy(c),
+        # Behavioral composites
+        "log_profile_views_30d": _log_profile_views_30d(c),
+        "log_search_appearance_30d": _log_search_appearance_30d(c),
+        "log_saved_by_recruiters_30d": _log_saved_by_recruiters_30d(c),
+        "log_connection_count": _log_connection_count(c),
+        "log_endorsements_received": _log_endorsements_received(c),
+        "engagement_intensity": _engagement_intensity(c),
+        "behavioral_risk_score": _behavioral_risk_score(c),
+        "availability_composite": _availability_composite(c),
+        # Skill mix
+        "expert_share": _expert_share(c),
+        "advanced_or_expert_share": _advanced_or_expert_share(c),
+        "skill_endorsement_mean": _skill_endorsement_mean(c),
+        "skill_endorsement_max": _skill_endorsement_max(c),
+        "skill_count_log": _skill_count_log(c),
+        "ai_skill_count_log": _ai_skill_count_log(c),
+        # Title / seniority alignment
+        "title_yoe_in_band": _title_yoe_in_band(c),
+        "seniority_distance_from_ideal": _seniority_distance_from_ideal(c),
     }
 
     return features
@@ -706,6 +1132,32 @@ def feature_columns() -> list[str]:
         "verified_email", "verified_phone", "linkedin_connected",
         "profile_views_30d", "search_appearance_30d", "saved_by_recruiters_30d",
         "github_activity_score",
+
+        # ------------------------------------------------------------------
+        # Feature zoo v2 (Agent 5): career-shape, JD-literal, behavioral.
+        # ------------------------------------------------------------------
+        # Career shape (10 features)
+        "n_ai_roles", "n_senior_roles", "n_product_roles", "n_india_roles",
+        "avg_role_duration_months", "max_role_duration_months",
+        "tenure_variance", "career_progression_slope",
+        "current_role_tenure_months", "n_career_gaps",
+        # JD-literal (10 features)
+        "jd_skill_match_count", "jd_skill_match_expert_count",
+        "jd_keyword_count_career", "jd_keyword_count_summary",
+        "title_jd_match", "seniority_jd_match", "location_jd_match",
+        "industry_jd_match", "has_product_company_recent",
+        "career_jd_sim_proxy",
+        # Behavioral (8 features)
+        "log_profile_views_30d", "log_search_appearance_30d",
+        "log_saved_by_recruiters_30d", "log_connection_count",
+        "log_endorsements_received", "engagement_intensity",
+        "behavioral_risk_score", "availability_composite",
+        # Skill mix (5 features)
+        "expert_share", "advanced_or_expert_share",
+        "skill_endorsement_mean", "skill_endorsement_max", "skill_count_log",
+        "ai_skill_count_log",
+        # Title / seniority alignment (2 features)
+        "title_yoe_in_band", "seniority_distance_from_ideal",
     ]
 
 

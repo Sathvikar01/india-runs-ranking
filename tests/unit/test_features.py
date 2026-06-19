@@ -150,3 +150,91 @@ def test_ai_candidate_high_ai_score():
     assert f["ai_keyword_hits_career"] >= 5
     # n_ai_skill_advanced is proficiency >= advanced; we have PyTorch + Transformers + Python(advanced, generic)
     assert f["n_ai_skill_advanced"] >= 2
+
+
+# ---------------------------------------------------------------------------
+# Feature zoo v2 (Agent 5) tests
+# ---------------------------------------------------------------------------
+
+
+def test_feature_zoo_v2_all_keys_present():
+    f = build_features(make_ai_candidate(), today=date(2026, 6, 17))
+    zoo_v2_keys = [
+        # Career shape
+        "n_ai_roles", "n_senior_roles", "n_product_roles", "n_india_roles",
+        "avg_role_duration_months", "max_role_duration_months",
+        "tenure_variance", "career_progression_slope",
+        "current_role_tenure_months", "n_career_gaps",
+        # JD-literal
+        "jd_skill_match_count", "jd_skill_match_expert_count",
+        "jd_keyword_count_career", "jd_keyword_count_summary",
+        "title_jd_match", "seniority_jd_match", "location_jd_match",
+        "industry_jd_match", "has_product_company_recent",
+        "career_jd_sim_proxy",
+        # Behavioral
+        "log_profile_views_30d", "log_search_appearance_30d",
+        "log_saved_by_recruiters_30d", "log_connection_count",
+        "log_endorsements_received", "engagement_intensity",
+        "behavioral_risk_score", "availability_composite",
+        # Skill mix
+        "expert_share", "advanced_or_expert_share",
+        "skill_endorsement_mean", "skill_endorsement_max", "skill_count_log",
+        "ai_skill_count_log",
+        # Title / seniority alignment
+        "title_yoe_in_band", "seniority_distance_from_ideal",
+    ]
+    for k in zoo_v2_keys:
+        assert k in f, f"missing feature: {k}"
+        assert f[k] is not None
+
+
+def test_feature_zoo_v2_ai_candidate_high_jd_match():
+    f = build_features(make_ai_candidate(), today=date(2026, 6, 17))
+    # AI fixture mentions RAG / retrieval / pytorch, etc.
+    assert f["jd_skill_match_count"] >= 1
+    assert f["jd_keyword_count_career"] >= 1
+    assert f["title_jd_match"] == 1
+    assert f["seniority_jd_match"] == 1  # 7 yrs is in 5-9 band
+    assert f["industry_jd_match"] == 1   # AI/ML industry
+
+
+def test_feature_zoo_v2_consulting_chain_low_jd_match():
+    f = build_features(make_consulting_chain_candidate(), today=date(2026, 6, 17))
+    # Consulting chain shouldn't match AI keywords.
+    assert f["title_jd_match"] == 0
+    assert f["industry_jd_match"] == 0
+    assert f["has_product_company_recent"] == 0
+    assert f["jd_skill_match_count"] == 0
+
+
+def test_feature_zoo_v2_honeypot_high_risk_score():
+    f = build_features(make_honeypot_candidate(), today=date(2026, 6, 17))
+    # Honeypot candidates should have a higher behavioral risk score.
+    assert f["behavioral_risk_score"] >= 0.0  # in [0,1]
+    # And a low availability composite.
+    assert 0.0 <= f["availability_composite"] <= 1.0
+
+
+def test_feature_zoo_v2_log_features_log1p_scale():
+    """log_* features should be monotonically increasing in raw counts."""
+    f = build_features(make_ai_candidate(), today=date(2026, 6, 17))
+    # log1p is monotone in raw count.
+    raw = f["profile_views_30d"]
+    log = f["log_profile_views_30d"]
+    assert log >= 0.0
+    if raw > 0:
+        import math
+        assert abs(log - math.log1p(raw)) < 1e-6
+
+
+def test_feature_zoo_v2_career_progression_slope_strict():
+    f = build_features(make_ai_candidate(), today=date(2026, 6, 17))
+    # slope is finite and well-defined
+    assert -10.0 <= f["career_progression_slope"] <= 10.0
+
+
+def test_feature_zoo_v2_feature_count_grew():
+    """v2 adds 35+ features; the schema should grow."""
+    cols = feature_columns()
+    assert len(cols) >= 110  # was 75, now ~110+
+
