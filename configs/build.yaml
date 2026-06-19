@@ -30,11 +30,17 @@ bm25:
   token_pattern: "(?u)\\b\\w[a-zA-Z0-9+#.-]{1,}\\b"
 
 cross_encoder:
-  model_name: artifacts/ce_finetuned  # Tier-3 fine-tuned on binary tier-3+ labels (AP=0.889)
+  # Agent 4: default is the strong bge-reranker-base backbone. If the
+  # fine-tuned artifact is not on disk, the ranker falls back to ms-marco.
+  # Set this to "cross-encoder/ms-marco-MiniLM-L-6-v2" to use the
+  # baseline.
+  model_name: BAAI/bge-reranker-base
+  fallback_model: cross-encoder/ms-marco-MiniLM-L-6-v2
   top_k_from_retrieval: 800  # WS-12: was 500, expanded to improve recall
   top_k_output: 400          # WS-12: was 200, more candidates get LTR + CatBoost scoring
-  max_length: 256
-  batch_size: 64
+  # bge-reranker-base wants longer sequences (512 vs ms-marco's 256).
+  max_length: 512
+  batch_size: 32            # smaller batch for the larger model
   device: cpu
 
 retrieval:
