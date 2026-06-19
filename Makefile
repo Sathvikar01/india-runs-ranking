@@ -9,7 +9,7 @@
 #   make audit CSV=outputs/team_xxx.csv
 #   make build confirm=1
 
-.PHONY: help test unit integration dry-run build retrain audit polish clean eval
+.PHONY: help test unit integration dry-run build retrain audit polish clean eval bench search-weights train-multitask train-topk
 
 PYTHON ?= python
 ARTIFACTS ?= artifacts
@@ -93,3 +93,26 @@ eval:
 	else \
 	    $(PYTHON) evaluation/run_evaluation.py --skip-ranker --csv $(CSV); \
 	fi
+
+# Agent 10 — quick local benchmarks (5k dev split). Use these to validate
+# every change in <2 min without rebuilding artifacts.
+bench:
+	$(PYTHON) scripts/bench_quick.py
+
+search-weights:
+	$(PYTHON) scripts/search_ensemble_weights.py \
+	    --candidates data/raw/candidates_5k.jsonl \
+	    --out artifacts/best_ensemble_weights.json \
+	    --rounds 2
+
+train-multitask:
+	$(PYTHON) scripts/train_ltr_multitask.py \
+	    --candidates data/raw/candidates_5k.jsonl \
+	    --out-dir artifacts/ltr_multitask \
+	    --num-boost-round 600
+
+train-topk:
+	$(PYTHON) scripts/train_listwise_reranker.py \
+	    --candidates data/raw/candidates_5k.jsonl \
+	    --out artifacts/ltr_topk.cbm \
+	    --num-boost-round 1500
