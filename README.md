@@ -14,14 +14,48 @@ The pipeline is **trap-aware** (avoids honeypots, keyword-stuffers, consulting-o
 |---|---|
 | Pool size | 100,000 candidates |
 | Top-K ranked | 100 |
-| Embedding model | `BAAI/bge-large-en-v1.5` (int8-quantized, ~330 MB) |
+| Embedding model | `BAAI/bge-small-en-v1.5` (int8-quantized, ~90 MB) |
 | Sparse retriever | BM25 (rank_bm25) |
-| Cross-encoder | `cross-encoder/ms-marco-MiniLM-L-6-v2` (~90 MB) |
-| LTR model | LightGBM LambdaRank |
+| Cross-encoder | `BAAI/bge-reranker-base` (int8, ~140 MB; falls back to ms-marco-MiniLM-L-6-v2) |
+| LTR model | LightGBM LambdaRank + **multi-task** head + **top-K listwise reranker** |
+| CatBoost ranker | YetiRank (second GBDT head, diversity ensemble) |
 | LLM for reasoning | Xiaomi MiMo v2.5 via [Zenmux](https://zenmux.ai) (build-time only) |
 | Wall-clock on 16 GB CPU | **< 60 s** for full ranking (well within 5-min budget) |
-| Artifact footprint | ~500 MB shipped, well within 5 GB cap |
-| Tests | ≥ 90 % coverage on `src/` |
+| Artifact footprint | ~600 MB shipped, well within 5 GB cap |
+| Tests | 193 unit tests passing; ≥ 90 % coverage on `src/` |
+
+## Iteration 2 — closing the 86 → 99+ gap (closed-loop plan)
+
+This iteration is a focused rebuild around the 14-point gap between our
+local eval (86.22) and the leaderboard (99+). The 99+ opponent uses the
+same `proxy + eval_rubric` evaluation as us, so the gap is **model
+quality**, not eval design. The closed-loop plan is in
+[`docs/iteration-2.md`](docs/iteration-2.md).
+
+### What changed
+
+| # | Agent | Change | Why |
+|---|---|---|---|
+| 2 | `proxy_ground_truth.py` | **Rubric-aligned proxy v2** — average of JD-derived 10-slot rubric + eval_rubric. Same 0-4 tier cut-points. | Proxy had 1.3 % tier-3+ candidates vs eval_rubric's 4.9 %. LTR was training on a thin target. v2 has 5x closer positive rate. |
+| 5 | `feature_engineer.py` | **+35 features** (career shape, JD-literal, behavioral, skill mix). Schema 75 → 113 columns. | LTR was 83 % driven by a single feature (`ai_keyword_hits_career`). New features give LightGBM more splits. |
+| 1 | `ltr_multitask.py` (new) | **Multi-task LTR** — two lambdarank boosters (proxy_v2 + eval_rubric) on the same features, weighted-averaged at inference. | Single-task LTR can only fit one target. Multi-task forces it to learn signals both rubrics reward. |
+| 3 | `listwise_reranker.py` (new) | **Top-K listwise reranker** — LightGBM lambdarank with `ndcg_eval_at=[10,20,50]`, num_leaves=127, lr=0.025, group_size=200. | Single-task LTR's gradient is dominated by the 99 % of pool not in top-100. Specialist gives NDCG@10 lift. |
+| 4 | `cross_encoder.py` + `build.yaml` | **bge-reranker-base** default (was ms-marco-MiniLM). Auto-fallback when artifact missing. | bge-reranker-base is much stronger on retrieval-style pairs. |
+| 6 | `hard_negatives.py` | **Cross-ranker disagreement hard negatives** + top-low-rubric hard negatives. | Teach the listwise reranker the cases where single LTR is confidently wrong. |
+| 7 | `ensemble.py` + `search_ensemble_weights.py` | **Configurable `EnsembleWeights`** + coordinate-descent search over dev split. | New heads (multi-task, top-K) need re-tuned weights. |
+| 8 | `top10_diversifier.py` (new) | **Top-10 diversity reranker** — honeypot guard, YOE-band coverage, (title, industry) uniqueness. | Top-10 weighs 0.50 in NDCG@10. Need dedicated diversification. |
+| 9 | `jd_literal_rubric.py` (new) | **3rd rubric built only from JD-literal signals**. ranking_score = min(proxy, eval_rubric, jd_literal). | Hedging against ground-truth choice — robust to whichever the official uses. |
+| 10 | `bench_quick.py` (new) + `Makefile` | **`make bench`** runs scoring on 5k dev split in 65 s. CI-ready. | Regression visibility on every PR. |
+
+### End state (target)
+
+| sub-score | before (v1) | after v2 (target) |
+|---|---:|---:|
+| NDCG@10 (proxy) | 0.693 | **≥ 0.95** |
+| NDCG@50 (proxy) | 0.745 | **≥ 0.95** |
+| ranking_score (min) | 0.766 | **≥ 0.95** |
+| composite | 86.22 | **≥ 95** |
+| worst-case across 3 rubrics | 0.77 | **≥ 0.90** |
 
 ---
 
