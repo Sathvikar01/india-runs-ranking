@@ -373,6 +373,11 @@ def main(argv: list[str] | None = None) -> int:
     # Ensure the order matches top_ce_ids for the LTR score join.
     feats_for_top = feats_for_top.set_index("candidate_id").loc[top_ce_ids].reset_index()
     X = feats_for_top[feature_columns() + categorical_columns()].copy()
+    # Cast categorical columns to category dtype so LightGBM's
+    # categorical_feature check matches what the LTR saw at training.
+    for c in categorical_columns():
+        if c in X.columns:
+            X[c] = X[c].astype("category")
     ltr_scores = ltr.predict(X)
     {cid: float(s) for cid, s in zip(top_ce_ids, ltr_scores, strict=False)}
 
@@ -391,6 +396,9 @@ def main(argv: list[str] | None = None) -> int:
     cb_all: dict[str, float] = {}
     if catboost_ranker is not None:
         X_all_cb = features_df[feature_columns() + categorical_columns()].copy()
+        for c in categorical_columns():
+            if c in X_all_cb.columns:
+                X_all_cb[c] = X_all_cb[c].astype("category")
         cb_scores = catboost_ranker.predict(X_all_cb)
         cb_all = dict(zip(features_df["candidate_id"], cb_scores, strict=False))
         log.info("CatBoost scores ready for %d candidates", len(cb_all))
@@ -410,12 +418,18 @@ def main(argv: list[str] | None = None) -> int:
     bin_all: dict[str, float] = {}
     if binary_clf is not None:
         X_all_bin = features_df[feature_columns() + categorical_columns()].copy()
+        for c in categorical_columns():
+            if c in X_all_bin.columns:
+                X_all_bin[c] = X_all_bin[c].astype("category")
         bin_proba = binary_clf.predict(X_all_bin)
         bin_all = dict(zip(features_df["candidate_id"], bin_proba, strict=False))
         log.info("Binary classifier scores ready for %d candidates", len(bin_all))
 
     log.info("Ensemble (vectorized) …")
     X_all = features_df[feature_columns() + categorical_columns()].copy()
+    for c in categorical_columns():
+        if c in X_all.columns:
+            X_all[c] = X_all[c].astype("category")
     ltr_all = ltr.predict(X_all)
     id_to_ltr_all = dict(zip(features_df["candidate_id"], ltr_all, strict=False))
     id_to_ce = {cid: float(s) for cid, s in ce_scored}

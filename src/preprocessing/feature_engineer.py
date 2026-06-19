@@ -472,6 +472,34 @@ def _recency_score(last_active: str | None, today: date) -> float:
     return 0.0
 
 
+def _behavioral_availability(c: Candidate) -> float:
+    """Backwards-compat: the original availability_score column.
+
+    Computed at build time so the ranker can read it directly from the
+    feature store (avoids re-loading candidates at rank time).
+    """
+    from src.behavioral.availability import availability_score
+    return float(availability_score(c))
+
+
+def _behavioral_positive(c: Candidate) -> float:
+    """Backwards-compat: the original positive_boost column."""
+    from src.behavioral.jd_filters import positive_boost
+    return float(positive_boost(c))
+
+
+def _behavioral_negative(c: Candidate) -> float:
+    """Backwards-compat: the original negative_penalty column."""
+    from src.behavioral.jd_filters import negative_penalty
+    return float(negative_penalty(c))
+
+
+def _behavioral_honeypot(c: Candidate) -> float:
+    """Backwards-compat: the original honeypot_risk column."""
+    from src.behavioral.honeypot import honeypot_risk
+    return float(honeypot_risk(c))
+
+
 # ---------------------------------------------------------------------------
 # Feature zoo v2 (Agent 5) — additional discriminative features added to
 # the build_features dict and to feature_columns(). These split the LTR's
@@ -1069,6 +1097,13 @@ def build_features(c: Candidate, today: date | None = None) -> dict[str, Any]:
         "engagement_intensity": _engagement_intensity(c),
         "behavioral_risk_score": _behavioral_risk_score(c),
         "availability_composite": _availability_composite(c),
+        # Backwards-compat columns the existing ranker reads directly
+        # from the feature store (avoids re-loading candidates at rank
+        # time for the ensemble block).
+        "behavioral_availability": _behavioral_availability(c),
+        "behavioral_positive": _behavioral_positive(c),
+        "behavioral_negative": _behavioral_negative(c),
+        "behavioral_honeypot": _behavioral_honeypot(c),
         # Skill mix
         "expert_share": _expert_share(c),
         "advanced_or_expert_share": _advanced_or_expert_share(c),
@@ -1158,6 +1193,10 @@ def feature_columns() -> list[str]:
         "ai_skill_count_log",
         # Title / seniority alignment (2 features)
         "title_yoe_in_band", "seniority_distance_from_ideal",
+        # Backwards-compat columns the existing ranker reads from the
+        # feature store at rank time (avoids re-streaming candidates).
+        "behavioral_availability", "behavioral_positive",
+        "behavioral_negative", "behavioral_honeypot",
     ]
 
 
