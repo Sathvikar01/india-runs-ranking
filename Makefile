@@ -9,7 +9,7 @@
 #   make audit CSV=outputs/team_xxx.csv
 #   make build confirm=1
 
-.PHONY: help test unit integration dry-run build retrain audit polish clean eval bench search-weights train-multitask train-topk
+.PHONY: help test unit integration dry-run build retrain audit polish clean eval bench search-weights train-multitask train-topk dev-build dev-bm25
 
 PYTHON ?= python
 ARTIFACTS ?= artifacts
@@ -116,3 +116,24 @@ train-topk:
 	    --candidates data/raw/candidates_5k.jsonl \
 	    --out artifacts/ltr_topk.cbm \
 	    --num-boost-round 1500
+
+# Agent dev — full dev pipeline on the 5k split (~3 min on dev CPU).
+# Trains: BM25 + features + multi-task LTR + top-K reranker + ltr.cbm.
+# Output: a fresh dev-build of artifacts/ that the ranker can consume
+# directly. The new artifacts use the 113-feature schema from
+# Agent 5 (vs the legacy 75-feature schema).
+dev-build:
+	$(PYTHON) scripts/build_bm25.py --candidates data/raw/candidates_5k.jsonl
+	$(PYTHON) scripts/dev_build_ltrs.py
+
+dev-bm25:
+	$(PYTHON) scripts/build_bm25.py --candidates data/raw/candidates_5k.jsonl
+
+# Run the ranker on the 5k dev split with the dev-built artifacts.
+dev-rank:
+	$(PYTHON) -m src.serving.rank \
+	    --candidates data/raw/candidates_5k.jsonl \
+	    --job-description data/raw/job_description.md \
+	    --artifacts artifacts \
+	    --out outputs/team_xxx_v2.csv \
+	    --dry-run
