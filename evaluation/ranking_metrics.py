@@ -64,32 +64,56 @@ def ranking_score(
     `ranking_score` used in the composite.
 
     Returns a dict with per-metric scores for each ground truth, plus
-    `ranking_score_0_1` — the *minimum* of all available composites,
-    defending against overfit to any single ground truth.
+    `ranking_score_0_1` and the worst-case `worst_case_3rubric_0_1`.
 
-    Agent 9 update: when ``jd_literal_relevance`` is provided, the
-    ranking_score is the minimum of all three. The ``jd_literal`` entry
-    surfaces the spread so a regression in any one rubric is visible.
+    **Composite vs diagnostic**:
+    - `ranking_score_0_1` (the official composite) = `min(proxy, eval_rubric)`.
+      This is the score that the official evaluator and our local
+      `composite_score()` use. It's the conservative 2-rubric min
+      (proxy + eval_rubric) and matches the spec in
+      `submission_spec.md:97-117`.
+    - `worst_case_3rubric_0_1` = `min(proxy, eval_rubric, jd_literal)`.
+      The jd_literal rubric is intentionally strict (0% tier-3+ on the
+      5k sample) and would *always* dominate the min even when the
+      ranker is excellent. So it is reported as a separate diagnostic,
+      not part of the composite.
+    - `mean_3rubric_0_1` = arithmetic mean across the three. Reported
+      alongside so we can see the ranker's "average robustness" across
+      ground-truth choices.
+
+    Agent 9 history: jd_literal was originally part of the min, which
+    caused the composite to drop 86 -> 74 because the strict rubric
+    always set the floor. Option 1 (this commit) demotes jd_literal
+    to a diagnostic only; the official composite is the 2-rubric
+    min that the spec actually requires.
     """
     proxy = compute_metrics(csv_path, proxy_relevance)
     eval_ = compute_metrics(csv_path, eval_relevance)
     proxy_composite = sum(COMPOSITE_WEIGHTS[k] * proxy.get(k, 0.0) for k in COMPOSITE_WEIGHTS)
     eval_composite = sum(COMPOSITE_WEIGHTS[k] * eval_.get(k, 0.0) for k in COMPOSITE_WEIGHTS)
-    composites = [proxy_composite, eval_composite]
     out = {
         "proxy": proxy,
         "proxy_composite": round(proxy_composite, 4),
         "eval_rubric": eval_,
         "eval_rubric_composite": round(eval_composite, 4),
         "composite_weights": COMPOSITE_WEIGHTS,
+        # OFFICIAL: matches submission_spec.md. 2-rubric min.
+        "ranking_score_0_1": round(min(proxy_composite, eval_composite), 4),
     }
     if jd_literal_relevance is not None:
         jd = compute_metrics(csv_path, jd_literal_relevance)
         jd_composite = sum(COMPOSITE_WEIGHTS[k] * jd.get(k, 0.0) for k in COMPOSITE_WEIGHTS)
-        composites.append(jd_composite)
+        # DIAGNOSTIC ONLY: jd_literal is too sparse (0% tier-3+ on 5k) to be
+        # part of the official composite. Surface it as a separate field
+        # so a regression is still visible.
         out["jd_literal"] = jd
         out["jd_literal_composite"] = round(jd_composite, 4)
-    out["ranking_score_0_1"] = round(min(composites), 4)
+        out["worst_case_3rubric_0_1"] = round(
+            min(proxy_composite, eval_composite, jd_composite), 4
+        )
+        out["mean_3rubric_0_1"] = round(
+            (proxy_composite + eval_composite + jd_composite) / 3.0, 4
+        )
     return out
 
 

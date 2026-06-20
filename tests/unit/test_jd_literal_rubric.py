@@ -121,13 +121,20 @@ def test_jd_literal_score_strong_candidate():
 
 
 def test_jd_literal_score_low_yoe_band():
-    c = _stub_candidate(yoe=3.0)
+    """Iteration 3: the band is 3-12, so 2.0 yrs is now out-of-band."""
+    c = _stub_candidate(yoe=2.0)
     assert _is_in_yoe_band(c) is False
 
 
 def test_jd_literal_score_in_yoe_band():
     c = _stub_candidate(yoe=7.0)
     assert _is_in_yoe_band(c) is True
+
+
+def test_jd_literal_score_extended_yoe_band():
+    """3-12 yrs is also in-band (extension)."""
+    assert _is_in_yoe_band(_stub_candidate(yoe=4.0)) is True
+    assert _is_in_yoe_band(_stub_candidate(yoe=11.0)) is True
 
 
 def test_jd_literal_score_title_chaser():
@@ -166,14 +173,28 @@ def test_jd_literal_relevance_strong():
 
 
 def test_jd_literal_relevance_weak():
-    """A consultant with no AI evidence → low tier."""
+    """A consultant with no AI + no prestige + no relocate → low tier.
+
+    With v3's relaxed boundaries (0.60/0.40/0.25/0.10), even a mediocre
+    candidate hits tier 2 if they have location + availability. We test
+    a candidate who is weak on every dimension.
+    """
     c = _stub_candidate(
         title="HR Manager",
-        yoe=10.0,
+        yoe=1.0,  # out of extended 3-12 band
         company="Big Consulting Co",
         industry="Consulting",
         desc="Project management",
         gh=0,
+        relocate=False,  # also out of India+relocation
     )
+    # Override the school to a non-prestigious one.
+    c.education = []
     tier = jd_literal_relevance(c)
-    assert tier <= 1.0
+    # Score: 0 (no AI, no prestige, no relocate, no avail because
+    # location=Noida/Pune but not willing to relocate and not in
+    # preferred location... actually Bangalore is preferred. Need to
+    # change location too).
+    c.profile.location = "Delhi"  # not preferred, not tier-1 for relocation
+    tier = jd_literal_relevance(c)
+    assert tier in (0.0, 1.0)

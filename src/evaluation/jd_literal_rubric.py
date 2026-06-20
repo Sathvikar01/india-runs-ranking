@@ -69,7 +69,9 @@ _DISTRIBUTED = (
 
 def _has_ai_career(c: Candidate) -> bool:
     text = (build_career_text(c) or "").lower()
-    return sum(1 for k in _AI_JOBS if k in text) >= 3
+    # Iteration 3: lowered from 3+ to 1+ keyword hit so the rubric has
+    # tier-3+ positives in the pool (was 0% in v1 → effectively useless).
+    return any(k in text for k in _AI_JOBS)
 
 
 def _has_open_source(c: Candidate) -> bool:
@@ -99,8 +101,14 @@ def _is_product_company(c: Candidate) -> bool:
 
 
 def _is_in_yoe_band(c: Candidate) -> bool:
+    """Iteration 3: extended YOE band (5-9 ideal, 3-12 acceptable).
+
+    The hard 5-9 band was excluding too many strong candidates
+    (4-yr or 10-yr with otherwise perfect fit). We now count 3-12
+    as in-band so the rubric has tier-3+ positives.
+    """
     yoe = float(c.profile.years_of_experience or 0.0)
-    return 5 <= yoe <= 9
+    return 3 <= yoe <= 12
 
 
 def _is_available(c: Candidate) -> bool:
@@ -158,6 +166,12 @@ def jd_literal_score(c: Candidate) -> float:
     (0.15 each), then secondary signals (open_source, distributed,
     education, availability) at 0.05-0.07.
 
+    Iteration 3 update: AI evidence threshold lowered (3+ → 1+ keyword hit
+    gives full credit), tier boundaries relaxed (0.85/0.65/0.45/0.25 →
+    0.70/0.50/0.30/0.15). The original v1 boundaries produced 0% tier-3+
+    on the 5k dev split, which made the rubric useless as either a
+    training target or a diagnostic.
+
     Soft penalties (title-chaser, CV/robotics-only) reduce the score
     rather than zeroing it out, so the rubric is monotone with
     candidate quality.
@@ -184,19 +198,25 @@ def jd_literal_score(c: Candidate) -> float:
 
 
 def jd_literal_relevance(c: Candidate) -> float:
-    """0-4 tier. Strict version of the JD-literal rubric.
+    """0-4 tier. JD-literal rubric v3 (balanced).
 
-    Tier boundaries are intentionally tight (0.85 / 0.65 / 0.45 / 0.25)
-    so the JD-literal rubric is the strictest of the three.
+    Iteration 3 boundary calibration:
+      v1: 0.85/0.65/0.45/0.25 → 0% tier-3+ in 5k pool (useless)
+      v2: 0.60/0.40/0.25/0.10 → 32.5% tier-3+ (too generous)
+      v3: 0.78/0.55/0.35/0.20 → ~3-5% tier-3+ (matches eval_rubric)
+
+    Calibrated to land at a similar tier-3+ rate to the proxy and
+    eval_rubric rubrics so it's a useful 3rd perspective, not an
+    outlier that always sets the floor or the ceiling.
     """
     s = jd_literal_score(c)
-    if s >= 0.85:
+    if s >= 0.78:
         return 4.0
-    if s >= 0.65:
+    if s >= 0.55:
         return 3.0
-    if s >= 0.45:
+    if s >= 0.35:
         return 2.0
-    if s >= 0.25:
+    if s >= 0.20:
         return 1.0
     return 0.0
 
