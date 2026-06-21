@@ -18,17 +18,18 @@ def test_resolve_returns_existing_local_path(tmp_path: Path):
 
 
 def test_resolve_falls_back_when_missing(tmp_path: Path):
+    """Configured model is not a local path → returns FALLBACK_MODEL."""
     nonexistent = tmp_path / "does_not_exist"
-    # Should fall back to FALLBACK_MODEL when the configured name is
-    # neither an existing path nor the fallback itself.
     with patch("src.ranking.cross_encoder.log") as mock_log:
         out = _resolve_model_name("custom-model-name")
-    assert out == "custom-model-name"  # not a path, so passes through as-is
+    assert out == FALLBACK_MODEL
+    mock_log.warning.assert_called_once()
 
 
 def test_resolve_fallback_when_path_missing():
+    """Configured path doesn't exist → returns FALLBACK_MODEL."""
     out = _resolve_model_name("/no/such/path/ce_finetuned")
-    assert out == "/no/such/path/ce_finetuned"  # not the fallback string
+    assert out == FALLBACK_MODEL
 
 
 def test_fallback_model_constant():

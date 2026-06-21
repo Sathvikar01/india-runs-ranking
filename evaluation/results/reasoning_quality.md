@@ -1,18 +1,18 @@
 # Reasoning Quality Audit
 
-_Source: `outputs\dry_run\team_xxx_dryrun_20260619_095312.csv`_
+_Source: `outputs\dry_run\team_xxx_dryrun_20260621_024330.csv`_
 
 ## Summary
 
 - Rows: **100**
-- Clean rows (no issues): **54** (54.0 %)
+- Clean rows (no issues): **57** (57.0 %)
 - Rows with specific facts: **100** (100.0 %)
-- Rows with JD connection: **54** (54.0 %)
+- Rows with JD connection: **57** (57.0 %)
 - Rows with honest concerns: **100** (100.0 %)
 - Rows with hallucination issues: **0** (0.0 %)
 - Unique reasonings: **100** / 100
-- Mean pairwise bigram Jaccard: **0.1461** (lower = more diverse)
-- Length: min 123, max 246, mean 205.1
+- Mean pairwise bigram Jaccard: **0.1515** (lower = more diverse)
+- Length: min 123, max 246, mean 204.9
 - Length violations: 0 below 50 chars, 0 above 320
 
 ### Stage 4 checks (per `submission_spec.md:75-95`)
@@ -20,7 +20,7 @@ _Source: `outputs\dry_run\team_xxx_dryrun_20260619_095312.csv`_
 | Check | Verdict |
 |---|---|
 | Specific facts (yoe/title/skills/signal values) | PASS (n=100/100) |
-| JD connection (retrieval/ranking/LLM/etc.) | WARN (n=54/100) |
+| JD connection (retrieval/ranking/LLM/etc.) | WARN (n=57/100) |
 | Honest concerns where expected | PASS (n=100/100) |
 | No hallucination | PASS (n=0/100) |
 | Variation (no all-identical reasonings) | PASS (n=100/100) |
@@ -62,17 +62,14 @@ _Source: `outputs\dry_run\team_xxx_dryrun_20260619_095312.csv`_
 | 72 | `CAND_0004555` | no_jd_connection | 214 |
 | 75 | `CAND_0004243` | no_jd_connection | 198 |
 | 78 | `CAND_0001940` | no_jd_connection | 202 |
-| 79 | `CAND_0002184` | no_jd_connection | 210 |
-| 80 | `CAND_0004398` | no_jd_connection | 190 |
-| 81 | `CAND_0001600` | no_jd_connection | 194 |
-| 83 | `CAND_0000664` | no_jd_connection | 200 |
-| 86 | `CAND_0000063` | no_jd_connection | 205 |
-| 87 | `CAND_0004275` | no_jd_connection | 183 |
-| 88 | `CAND_0000588` | no_jd_connection | 201 |
-| 90 | `CAND_0002995` | no_jd_connection | 213 |
-| 93 | `CAND_0002524` | no_jd_connection | 191 |
-| 94 | `CAND_0003884` | no_jd_connection | 198 |
+| 80 | `CAND_0002184` | no_jd_connection | 199 |
+| 81 | `CAND_0000647` | no_jd_connection | 204 |
+| 83 | `CAND_0004031` | no_jd_connection | 194 |
+| 86 | `CAND_0004275` | no_jd_connection | 205 |
+| 88 | `CAND_0003022` | no_jd_connection | 188 |
+| 92 | `CAND_0002524` | no_jd_connection | 198 |
+| 94 | `CAND_0000588` | no_jd_connection | 204 |
 | 95 | `CAND_0000599` | no_jd_connection | 200 |
-| 96 | `CAND_0003009` | no_jd_connection | 184 |
-| 98 | `CAND_0001323` | no_jd_connection | 197 |
-| 99 | `CAND_0000348` | no_jd_connection | 201 |
+| 96 | `CAND_0000718` | no_jd_connection | 190 |
+| 97 | `CAND_0001323` | no_jd_connection | 204 |
+| 99 | `CAND_0004754` | no_jd_connection | 192 |

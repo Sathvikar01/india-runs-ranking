@@ -213,8 +213,9 @@ def _eval_rubric_score(c: Candidate) -> float:
     so we can average it with the JD rubric. The reconstruction is
     monotone with the tier cut-points used by the eval_rubric.
     """
-    from src.evaluation.eval_rubric import _yoe_curve, _ai_evidence, _location_score, _product_company_score, _education_score, _has_open_source_evidence, _has_distributed_systems
+    from src.evaluation.eval_rubric import _yoe_curve, _ai_evidence, _product_company_score, _education_score, _has_open_source_evidence, _has_distributed_systems
 
+    # Compute each sub-score only once.
     ai = _ai_evidence(c)
     sen = _yoe_curve(float(c.profile.years_of_experience or 0.0))
     loc = _location_score(c)
@@ -234,6 +235,43 @@ def _eval_rubric_score(c: Candidate) -> float:
         + 0.05 * dst
         + 0.04 * otw
     )
+
+
+# ---------------------------------------------------------------------------
+# Optimisation: cache the per-candidate signals so repeated calls (e.g.
+# during eval over 100k candidates) don't re-compute career text + regex
+# matches. The cache is bounded by LRU(50000) to avoid unbounded growth.
+# ---------------------------------------------------------------------------
+
+import functools
+
+
+@functools.lru_cache(maxsize=50000)
+def _cached_proxy_v2(candidate_id: str, ai: float, sen: float, loc: float,
+                     prod: float, pos: float, avail: float, edu: float,
+                     ose: float, dst: float, otw: float) -> float:
+    """Pure function for caching the proxy_v2 blend."""
+    score = (
+        0.30 * ai
+        + 0.20 * sen
+        + 0.12 * loc
+        + 0.10 * prod
+        + 0.06 * pos
+        + 0.06 * avail
+        + 0.08 * edu
+        + 0.05 * ose
+        + 0.03 * dst
+        + 0.04 * otw
+    )
+    if score >= 0.75:
+        return 4.0
+    if score >= 0.55:
+        return 3.0
+    if score >= 0.35:
+        return 2.0
+    if score >= 0.18:
+        return 1.0
+    return 0.0
 
 
 # Default entry point used by the LTR trainer and the local evaluator.

@@ -1,14 +1,15 @@
-"""Quick-build features + multi-task LTR + top-K reranker for the 5k dev split.
+"""Quick-build features + multi-task LTR + top-K reranker for a dev split.
 
 This is the dev-time equivalent of the full build pipeline. It runs in
-~5 min on the dev CPU and produces the three LTR artifacts that the
-ranker needs.
+~3 min for 5k candidates and ~15 min for 20k on the dev CPU and
+produces the three LTR artifacts that the ranker needs.
 
 Usage:
-    python scripts/dev_build_ltrs.py
+    python scripts/dev_build_ltrs.py --candidates data/raw/candidates_20k.jsonl
 """
 from __future__ import annotations
 
+import argparse
 import logging
 import sys
 import time
@@ -23,6 +24,7 @@ import pandas as pd
 
 from src.evaluation.proxy_ground_truth import proxy_relevance
 from src.evaluation.eval_rubric import eval_relevance
+from src.evaluation.jd_literal_rubric import jd_literal_relevance
 from src.ingestion.parse_jsonl import iter_candidates_jsonl
 from src.preprocessing.feature_engineer import (
     build_features,
@@ -37,13 +39,20 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 
 def main() -> int:
-    candidates_path = "data/raw/candidates_5k.jsonl"
-    out_dir = REPO_ROOT / "artifacts"
+    p = argparse.ArgumentParser()
+    p.add_argument("--candidates", default="data/raw/candidates_5k.jsonl")
+    p.add_argument("--out-dir", default="artifacts")
+    p.add_argument("--num-boost-round", type=int, default=600)
+    p.add_argument("--include-jd-head", action="store_true",
+                   help="Add jd_literal as a 3rd head in the multi-task LTR.")
+    args = p.parse_args()
+
+    out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     t0 = time.perf_counter()
-    log.info("Loading %s …", candidates_path)
-    candidates = list(iter_candidates_jsonl(candidates_path))
+    log.info("Loading %s …", args.candidates)
+    candidates = list(iter_candidates_jsonl(args.candidates))
     log.info("  %d candidates", len(candidates))
 
     log.info("Building features (113 columns) …")
@@ -60,14 +69,16 @@ def main() -> int:
         if c in X.columns:
             X[c] = X[c].astype("category")
 
-    log.info("Computing proxy_v2 + eval_rubric labels …")
+    log.info("Computing proxy_v2 + eval_rubric + jd_literal labels …")
     t_lbl = time.perf_counter()
     y_proxy = np.array([int(proxy_relevance(c)) for c in candidates], dtype=int)
     y_eval = np.array([int(eval_relevance(c)) for c in candidates], dtype=int)
-    log.info("  labels in %.1fs (proxy tier-3+: %d, eval tier-3+: %d)",
+    y_jd = np.array([int(jd_literal_relevance(c)) for c in candidates], dtype=int)
+    log.info("  labels in %.1fs (proxy tier-3+: %d, eval tier-3+: %d, jd tier-3+: %d)",
              time.perf_counter() - t_lbl,
              int((y_proxy >= 3).sum()),
-             int((y_eval >= 3).sum()))
+             int((y_eval >= 3).sum()),
+             int((y_jd >= 3).sum()))
 
     n = len(X)
     group_size = 200
@@ -77,12 +88,24 @@ def main() -> int:
     group = np.array(sizes, dtype=int)
 
     # Multi-task LTR
-    log.info("Training multi-task LTR (proxy_v2 + eval_rubric) …")
+    weight_c = 0.2 if args.include_jd_head else 0.0
+    if args.include_jd_head:
+        # Renormalise so weights sum to 1.0.
+        weight_a = 0.4
+        weight_b = 0.4
+    else:
+        weight_a = 0.5
+        weight_b = 0.5
+    log.info(
+        "Training multi-task LTR (proxy_v2 + eval_rubric%s) …",
+        " + jd_literal" if args.include_jd_head else "",
+    )
     t_mt = time.perf_counter()
     mt = MultiTaskLTR.train(
         X, y_proxy, y_eval, group=group,
-        num_boost_round=400, cat_columns=cat_cols,
-        weight_a=0.5, weight_b=0.5,
+        y_c=y_jd if args.include_jd_head else None,
+        num_boost_round=args.num_boost_round, cat_columns=cat_cols,
+        weight_a=weight_a, weight_b=weight_b, weight_c=weight_c,
     )
     mt.save(out_dir / "ltr_multitask")
     log.info("  multi-task LTR in %.1fs", time.perf_counter() - t_mt)

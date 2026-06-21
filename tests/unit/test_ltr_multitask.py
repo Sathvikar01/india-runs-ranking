@@ -75,9 +75,10 @@ def test_multitask_ltr_predict_per_head():
     mt = MultiTaskLTR.train(
         X, y_a, y_b, group=group, num_boost_round=5, cat_columns=[],
     )
-    a, b = mt.predict_per_head(X)
+    a, b, c = mt.predict_per_head(X)
     assert a.shape == (len(X),)
     assert b.shape == (len(X),)
+    assert c is None  # 2-head model has no c head
 
 
 def test_multitask_ltr_weighted_average():
@@ -88,7 +89,7 @@ def test_multitask_ltr_weighted_average():
     mt = MultiTaskLTR.train(
         X, y_a, y_b, group=group, num_boost_round=5, cat_columns=[],
     )
-    a, b = mt.predict_per_head(X)
+    a, b, _ = mt.predict_per_head(X)
     pred_default = mt.predict(X)
     np.testing.assert_allclose(pred_default, 0.5 * a + 0.5 * b, atol=1e-5)
     mt.weight_a, mt.weight_b = 0.7, 0.3

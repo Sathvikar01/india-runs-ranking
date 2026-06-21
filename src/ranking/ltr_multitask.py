@@ -36,25 +36,33 @@ log = logging.getLogger("ltr_multitask")
 
 
 class MultiTaskLTR:
-    """Two-head LTR: task A (proxy_v2) + task B (eval_rubric).
+    """Two- or three-head LTR: task A (proxy_v2) + task B (eval_rubric) [+ task C (jd_literal)].
 
-    Both heads share the same feature schema. The class wraps two
+    All heads share the same feature schema. The class wraps up to three
     ``lightgbm.Booster`` instances; ``predict`` returns the weighted sum
     of their per-row scores.
+
+    Iteration 3: a third head on the jd_literal target is opt-in. With
+    it, the ranker learns signals that all three ground-truth rubrics
+    reward (the "robust to ground-truth choice" promise).
     """
 
     def __init__(
         self,
         booster_a=None,
         booster_b=None,
+        booster_c=None,
         weight_a: float = 0.5,
         weight_b: float = 0.5,
+        weight_c: float = 0.0,
         cat_columns: list[str] | None = None,
     ) -> None:
         self.booster_a = booster_a
         self.booster_b = booster_b
+        self.booster_c = booster_c
         self.weight_a = float(weight_a)
         self.weight_b = float(weight_b)
+        self.weight_c = float(weight_c)
         self.cat_columns = cat_columns or categorical_columns()
         self.feature_columns = feature_columns()
 
@@ -65,11 +73,13 @@ class MultiTaskLTR:
         y_a: np.ndarray,
         y_b: np.ndarray,
         group: np.ndarray,
+        y_c: np.ndarray | None = None,
         cat_columns: list[str] | None = None,
         num_boost_round: int = 800,
         params: dict | None = None,
         weight_a: float = 0.5,
         weight_b: float = 0.5,
+        weight_c: float = 0.0,
     ) -> "MultiTaskLTR":
         import lightgbm as lgb
 
@@ -109,11 +119,24 @@ class MultiTaskLTR:
             default_params, dtrain_b, num_boost_round=num_boost_round,
         )
 
+        booster_c = None
+        if y_c is not None and weight_c > 0.0:
+            dtrain_c = lgb.Dataset(
+                X, label=y_c, group=group,
+                categorical_feature=cat_columns, free_raw_data=False,
+            )
+            log.info("Training MultiTaskLTR head C (jd_literal) …")
+            booster_c = lgb.train(
+                default_params, dtrain_c, num_boost_round=num_boost_round,
+            )
+
         return cls(
             booster_a=booster_a,
             booster_b=booster_b,
+            booster_c=booster_c,
             weight_a=weight_a,
             weight_b=weight_b,
+            weight_c=weight_c,
             cat_columns=cat_columns,
         )
 
@@ -122,21 +145,32 @@ class MultiTaskLTR:
             raise RuntimeError("MultiTaskLTR has no trained boosters")
         a = self.booster_a.predict(X)
         b = self.booster_b.predict(X)
+        if self.booster_c is not None and self.weight_c > 0.0:
+            c = self.booster_c.predict(X)
+            return self.weight_a * a + self.weight_b * b + self.weight_c * c
         return self.weight_a * a + self.weight_b * b
 
-    def predict_per_head(self, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-        """Return (head_a_scores, head_b_scores) for downstream analysis."""
-        return self.booster_a.predict(X), self.booster_b.predict(X)
+    def predict_per_head(self, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+        """Return (head_a, head_b, head_c_or_None) for downstream analysis."""
+        a = self.booster_a.predict(X)
+        b = self.booster_b.predict(X)
+        c = self.booster_c.predict(X) if self.booster_c is not None else None
+        return a, b, c
 
     def save(self, dir_path: str | Path) -> None:
         d = Path(dir_path)
         d.mkdir(parents=True, exist_ok=True)
         self.booster_a.save_model(str(d / "ltr_multitask_a.cbm"))
         self.booster_b.save_model(str(d / "ltr_multitask_b.cbm"))
+        if self.booster_c is not None:
+            self.booster_c.save_model(str(d / "ltr_multitask_c.cbm"))
         # Save the weights as a sidecar JSON.
         import json
+        meta = {"weight_a": self.weight_a, "weight_b": self.weight_b}
+        if self.weight_c > 0.0:
+            meta["weight_c"] = self.weight_c
         (d / "ltr_multitask_meta.json").write_text(
-            json.dumps({"weight_a": self.weight_a, "weight_b": self.weight_b}, indent=2),
+            json.dumps(meta, indent=2),
             encoding="utf-8",
         )
 
@@ -148,26 +182,38 @@ class MultiTaskLTR:
         d = Path(dir_path)
         booster_a = lgb.Booster(model_file=str(d / "ltr_multitask_a.cbm"))
         booster_b = lgb.Booster(model_file=str(d / "ltr_multitask_b.cbm"))
+        booster_c = None
+        c_path = d / "ltr_multitask_c.cbm"
+        if c_path.exists():
+            booster_c = lgb.Booster(model_file=str(c_path))
         meta_path = d / "ltr_multitask_meta.json"
-        weight_a, weight_b = 0.5, 0.5
+        weight_a, weight_b, weight_c = 0.5, 0.5, 0.0
         if meta_path.exists():
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
             weight_a = float(meta.get("weight_a", 0.5))
             weight_b = float(meta.get("weight_b", 0.5))
+            weight_c = float(meta.get("weight_c", 0.0))
         return cls(
             booster_a=booster_a,
             booster_b=booster_b,
+            booster_c=booster_c,
             weight_a=weight_a,
             weight_b=weight_b,
+            weight_c=weight_c,
             cat_columns=cat_columns,
         )
 
     def feature_importance(self, importance_type: str = "gain") -> pd.DataFrame:
         imp_a = self.booster_a.feature_importance(importance_type=importance_type)
         imp_b = self.booster_b.feature_importance(importance_type=importance_type)
-        return pd.DataFrame({
+        out = {
             "feature": self.feature_columns,
             "gain_a": imp_a,
             "gain_b": imp_b,
             "gain_total": self.weight_a * imp_a + self.weight_b * imp_b,
-        }).sort_values("gain_total", ascending=False)
+        }
+        if self.booster_c is not None and self.weight_c > 0.0:
+            imp_c = self.booster_c.feature_importance(importance_type=importance_type)
+            out["gain_c"] = imp_c
+            out["gain_total"] = out["gain_total"] + self.weight_c * imp_c
+        return pd.DataFrame(out).sort_values("gain_total", ascending=False)

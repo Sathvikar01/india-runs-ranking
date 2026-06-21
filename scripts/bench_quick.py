@@ -43,27 +43,29 @@ def main() -> int:
 
     from evaluation.ranking_metrics import ranking_score
     from evaluation.scoring import composite_score
-    from evaluation.ranking_metrics import load_candidates
     from src.evaluation.proxy_ground_truth import build_proxy_ground_truth
     from src.evaluation.eval_rubric import build_eval_ground_truth
     from src.evaluation.jd_literal_rubric import build_jd_literal_ground_truth
 
-    cands = load_candidates(args.candidates)
-    csv_ids = _read_csv_ids(csv_path)
-    cand_ids = {c.candidate_id for c in cands}
-    if csv_ids and not csv_ids.issubset(cand_ids):
-        missing = len(csv_ids - cand_ids)
-        log_msg = (
-            f"Warning: {missing}/{len(csv_ids)} ids in the CSV are not in the "
-            f"candidate pool ({args.candidates}). The bench will report a lower "
-            f"ranking_score than the ranker actually achieves. Use --candidates "
-            f"with the matching pool (e.g. data/raw/candidates.jsonl)."
-        )
+    # Use cached ground truth if available (saves 3-5 min on 5k pool).
+    import json as _json
+    candidates_basename = Path(args.candidates).stem
+    cache_path = REPO_ROOT / "artifacts" / f"ground_truth_{candidates_basename}.json"
+    if cache_path.exists():
+        log_msg = f"Loading cached ground truth from {cache_path} …"
         print(log_msg)
-
-    proxy = build_proxy_ground_truth(cands)
-    eval_ = build_eval_ground_truth(cands)
-    jd_literal = build_jd_literal_ground_truth(cands)
+        with cache_path.open("r", encoding="utf-8") as f:
+            cached = _json.load(f)
+        proxy = cached["proxy"]
+        eval_ = cached["eval_rubric"]
+        jd_literal = cached["jd_literal"]
+        cands = []  # not needed when ground truth is cached
+    else:
+        from evaluation.ranking_metrics import load_candidates
+        cands = load_candidates(args.candidates)
+        proxy = build_proxy_ground_truth(cands)
+        eval_ = build_eval_ground_truth(cands)
+        jd_literal = build_jd_literal_ground_truth(cands)
 
     r = ranking_score(csv_path, proxy, eval_, jd_literal)
     # reasoning_score / system_score / audit_score are not part of the

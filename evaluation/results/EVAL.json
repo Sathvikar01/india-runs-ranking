@@ -1,6 +1,6 @@
 {
   "ranker": {
-    "output_path": "outputs\\dry_run\\team_xxx_dryrun_20260619_095312.csv",
+    "output_path": "outputs\\dry_run\\team_xxx_dryrun_20260621_024330.csv",
     "wall_clock_s": null,
     "skipped": true
   },
@@ -9,17 +9,17 @@
     "proxy": {
       "ndcg@5": 0.6475521094792619,
       "p@5": 1.0,
-      "ndcg@10": 0.6834371650671558,
+      "ndcg@10": 0.6428929848857966,
       "p@10": 1.0,
-      "ndcg@50": 0.8674037145855823,
+      "ndcg@50": 0.8288943908236392,
       "p@50": 1.0,
-      "ndcg@100": 0.9280345698617833,
+      "ndcg@100": 0.9162510437449446,
       "p@100": 1.0,
       "map": 1.0,
       "mrr": 1.0,
-      "composite": 0.8019396969092526
+      "composite": 0.7701148096899901
     },
-    "proxy_composite": 0.8019,
+    "proxy_composite": 0.7701,
     "eval_rubric": {
       "ndcg@5": 0.6475521094792619,
       "p@5": 1.0,
@@ -27,7 +27,7 @@
       "p@10": 1.0,
       "ndcg@50": 0.8102359743973252,
       "p@50": 1.0,
-      "ndcg@100": 0.9091783417092743,
+      "ndcg@100": 0.9086314892990365,
       "p@100": 1.0,
       "map": 1.0,
       "mrr": 1.0,
@@ -40,29 +40,29 @@
       "map": 0.15,
       "p@10": 0.05
     },
-    "ranking_score_0_1": 0.7713,
+    "ranking_score_0_1": 0.7701,
     "jd_literal": {
       "ndcg@5": 0.3132401197181324,
       "p@5": 0.8,
       "ndcg@10": 0.45368905578207774,
       "p@10": 0.8,
-      "ndcg@50": 0.5288632256496757,
+      "ndcg@50": 0.5384771793191924,
       "p@50": 0.62,
-      "ndcg@100": 0.7252686367169413,
+      "ndcg@100": 0.7273757795700169,
       "p@100": 0.59,
-      "map": 0.6728942855543555,
+      "map": 0.6711058070205681,
       "mrr": 0.5,
-      "composite": 0.5264376384190949
+      "composite": 0.5290535527398819
     },
-    "jd_literal_composite": 0.5264,
-    "worst_case_3rubric_0_1": 0.5264,
-    "mean_3rubric_0_1": 0.6999
+    "jd_literal_composite": 0.5291,
+    "worst_case_3rubric_0_1": 0.5291,
+    "mean_3rubric_0_1": 0.6901
   },
   "reasoning": {
-    "reasoning_score_0_1": 0.9233,
+    "reasoning_score_0_1": 0.9283,
     "per_check_pass_rate": {
       "specific_facts": 1.0,
-      "jd_connection": 0.54,
+      "jd_connection": 0.57,
       "honest_concerns": 1.0,
       "no_hallucination": 1.0,
       "variation": 1.0,
@@ -70,17 +70,17 @@
     },
     "audit_summary": {
       "n_rows": 100,
-      "n_clean": 54,
+      "n_clean": 57,
       "n_with_facts": 100,
-      "n_with_jd_connection": 54,
+      "n_with_jd_connection": 57,
       "n_with_honest_concerns": 100,
       "n_hallucination_issues": 0,
       "n_unique_reasonings": 100,
-      "mean_pairwise_jaccard": 0.1461,
+      "mean_pairwise_jaccard": 0.1515,
       "length_distribution": {
         "min": 123,
         "max": 246,
-        "mean": 205.09,
+        "mean": 204.88,
         "below_50": 0,
         "above_320": 0
       },
@@ -98,7 +98,7 @@
       },
       "lint_clean": {
         "passed": false,
-        "stdout_tail": "  \u001b[1m\u001b[94m|\u001b[0m\n\u001b[1m\u001b[96mhelp\u001b[0m: \u001b[1mRemove unused import\u001b[0m\n\nFound 408 errors.\n[\u001b[36m*\u001b[0m] 130 fixable with the `--fix` option (17 hidden fixes can be enabled with the `--unsafe-fixes` option).\n"
+        "stdout_tail": "  \u001b[1m\u001b[94m|\u001b[0m\n\u001b[1m\u001b[96mhelp\u001b[0m: \u001b[1mRemove unused import\u001b[0m\n\nFound 418 errors.\n[\u001b[36m*\u001b[0m] 132 fixable with the `--fix` option (16 hidden fixes can be enabled with the `--unsafe-fixes` option).\n"
       },
       "output_100_rows": {
         "passed": true,
@@ -137,196 +137,208 @@
     "top_20_by_gain": [
       {
         "feature": "yoe_in_5_9_band",
-        "gain": 1317.708870071085,
-        "split_count": 157,
-        "gain_pct": 39.52
+        "gain": 1326.038812852952,
+        "split_count": 161,
+        "gain_pct": 39.7
       },
       {
         "feature": "ai_keyword_hits_career",
-        "gain": 561.3066860993039,
-        "split_count": 538,
-        "gain_pct": 16.84
-      },
-      {
-        "feature": "seniority_distance_from_ideal",
-        "gain": 236.91238991886982,
-        "split_count": 262,
-        "gain_pct": 7.11
+        "gain": 503.45584410188434,
+        "split_count": 581,
+        "gain_pct": 15.07
       },
       {
         "feature": "jd_keyword_count_career",
-        "gain": 233.49385790565788,
-        "split_count": 195,
-        "gain_pct": 7.0
+        "gain": 321.6071146542331,
+        "split_count": 324,
+        "gain_pct": 9.63
       },
       {
-        "feature": "location_tier1_india",
-        "gain": 101.03838213886047,
-        "split_count": 574,
-        "gain_pct": 3.03
+        "feature": "seniority_distance_from_ideal",
+        "gain": 230.06879286301935,
+        "split_count": 202,
+        "gain_pct": 6.89
       },
       {
         "feature": "location_jd_match",
-        "gain": 94.51910637812611,
-        "split_count": 243,
-        "gain_pct": 2.83
+        "gain": 96.4516890976047,
+        "split_count": 195,
+        "gain_pct": 2.89
       },
       {
-        "feature": "has_distributed_systems_evidence",
-        "gain": 85.71638431453431,
-        "split_count": 406,
-        "gain_pct": 2.57
+        "feature": "location_tier1_india",
+        "gain": 94.8634217179806,
+        "split_count": 507,
+        "gain_pct": 2.84
       },
       {
         "feature": "availability_composite",
-        "gain": 79.47515633558027,
-        "split_count": 514,
-        "gain_pct": 2.38
+        "gain": 85.83370794206483,
+        "split_count": 660,
+        "gain_pct": 2.57
       },
       {
-        "feature": "behavioral_negative",
-        "gain": 55.02049385824182,
-        "split_count": 343,
-        "gain_pct": 1.65
+        "feature": "has_distributed_systems_evidence",
+        "gain": 73.60504498700786,
+        "split_count": 337,
+        "gain_pct": 2.2
       },
       {
         "feature": "ai_career_share",
-        "gain": 51.39312917506364,
+        "gain": 73.43373652758376,
         "split_count": 76,
-        "gain_pct": 1.54
+        "gain_pct": 2.2
       },
       {
         "feature": "behavioral_availability",
-        "gain": 50.67562431233619,
-        "split_count": 633,
-        "gain_pct": 1.52
+        "gain": 50.16991847814231,
+        "split_count": 682,
+        "gain_pct": 1.5
       },
       {
         "feature": "seniority_jd_match",
-        "gain": 46.17203346834867,
-        "split_count": 15,
-        "gain_pct": 1.38
+        "gain": 47.59804887440987,
+        "split_count": 16,
+        "gain_pct": 1.43
       },
       {
-        "feature": "location_is_noida_or_pune",
-        "gain": 35.80915310349155,
-        "split_count": 142,
-        "gain_pct": 1.07
+        "feature": "behavioral_negative",
+        "gain": 35.1637047948948,
+        "split_count": 418,
+        "gain_pct": 1.05
       },
       {
         "feature": "github_activity_score",
-        "gain": 31.60736462147876,
-        "split_count": 555,
-        "gain_pct": 0.95
-      },
-      {
-        "feature": "has_ai_career_evidence",
-        "gain": 24.801281563588418,
-        "split_count": 9,
-        "gain_pct": 0.74
-      },
-      {
-        "feature": "behavioral_positive",
-        "gain": 21.282586174301517,
-        "split_count": 479,
-        "gain_pct": 0.64
+        "gain": 29.75062890673013,
+        "split_count": 408,
+        "gain_pct": 0.89
       },
       {
         "feature": "open_to_work",
-        "gain": 18.705499171934207,
-        "split_count": 332,
-        "gain_pct": 0.56
+        "gain": 28.368877497223366,
+        "split_count": 322,
+        "gain_pct": 0.85
       },
       {
-        "feature": "skill_endorsement_mean",
-        "gain": 18.046363939574185,
-        "split_count": 389,
-        "gain_pct": 0.54
+        "feature": "product_company_count",
+        "gain": 25.878884465045942,
+        "split_count": 357,
+        "gain_pct": 0.77
       },
       {
-        "feature": "search_appearance_30d",
-        "gain": 18.046313337581704,
-        "split_count": 418,
-        "gain_pct": 0.54
+        "feature": "location_is_noida_or_pune",
+        "gain": 25.2631761347875,
+        "split_count": 134,
+        "gain_pct": 0.76
+      },
+      {
+        "feature": "has_ai_career_evidence",
+        "gain": 21.824660420417786,
+        "split_count": 7,
+        "gain_pct": 0.65
+      },
+      {
+        "feature": "behavioral_positive",
+        "gain": 18.537115671956048,
+        "split_count": 412,
+        "gain_pct": 0.55
       },
       {
         "feature": "distributed_systems_count",
-        "gain": 17.633155296859627,
-        "split_count": 123,
-        "gain_pct": 0.53
+        "gain": 18.4321876130275,
+        "split_count": 131,
+        "gain_pct": 0.55
+      },
+      {
+        "feature": "search_appearance_30d",
+        "gain": 18.044671624880447,
+        "split_count": 458,
+        "gain_pct": 0.54
       }
     ],
     "top_10_vs_bottom_10_diff_top20": [
       {
         "feature": "search_appearance_30d",
         "top_mean": 407.1,
-        "bottom_mean": 194.4,
-        "delta": 212.7
+        "bottom_mean": 237.5,
+        "delta": 169.6
       },
       {
         "feature": "profile_views_30d",
         "top_mean": 97.6,
-        "bottom_mean": 62.7,
-        "delta": 34.9
-      },
-      {
-        "feature": "skill_endorsement_max",
-        "top_mean": 45.3,
-        "bottom_mean": 25.8,
-        "delta": 19.5
+        "bottom_mean": 54.4,
+        "delta": 43.2
       },
       {
         "feature": "profile_completeness",
         "top_mean": 72.26,
-        "bottom_mean": 60.64,
-        "delta": 11.62
+        "bottom_mean": 62.06,
+        "delta": 10.2
       },
       {
-        "feature": "current_role_tenure_months",
-        "top_mean": 30.9,
-        "bottom_mean": 22.1,
-        "delta": 8.8
+        "feature": "skill_endorsement_max",
+        "top_mean": 45.3,
+        "bottom_mean": 36.8,
+        "delta": 8.5
       },
       {
         "feature": "skill_endorsement_mean",
         "top_mean": 17.0363,
-        "bottom_mean": 9.7715,
-        "delta": 7.2649
+        "bottom_mean": 11.8983,
+        "delta": 5.138
+      },
+      {
+        "feature": "current_role_tenure_months",
+        "top_mean": 30.9,
+        "bottom_mean": 26.3,
+        "delta": 4.6
       },
       {
         "feature": "saved_by_recruiters_30d",
         "top_mean": 19.9,
-        "bottom_mean": 15.3,
-        "delta": 4.6
+        "bottom_mean": 15.5,
+        "delta": 4.4
       },
       {
         "feature": "ai_keyword_hits_skills",
         "top_mean": 4.4,
-        "bottom_mean": 1.1,
-        "delta": 3.3
-      },
-      {
-        "feature": "advanced_skill_count",
-        "top_mean": 3.9,
-        "bottom_mean": 1.0,
-        "delta": 2.9
-      },
-      {
-        "feature": "n_skills",
-        "top_mean": 12.6,
-        "bottom_mean": 10.1,
-        "delta": 2.5
+        "bottom_mean": 1.4,
+        "delta": 3.0
       },
       {
         "feature": "ai_keyword_hits_career",
         "top_mean": 3.3,
-        "bottom_mean": 0.9,
-        "delta": 2.4
+        "bottom_mean": 0.6,
+        "delta": 2.7
       },
       {
         "feature": "jd_keyword_count_career",
         "top_mean": 2.6,
-        "bottom_mean": 0.8,
+        "bottom_mean": 0.7,
+        "delta": 1.9
+      },
+      {
+        "feature": "advanced_skill_count",
+        "top_mean": 3.9,
+        "bottom_mean": 2.0,
+        "delta": 1.9
+      },
+      {
+        "feature": "n_named_jd_skills",
+        "top_mean": 2.4,
+        "bottom_mean": 0.5,
+        "delta": 1.9
+      },
+      {
+        "feature": "jd_skill_match_count",
+        "top_mean": 2.4,
+        "bottom_mean": 0.5,
+        "delta": 1.9
+      },
+      {
+        "feature": "n_skills",
+        "top_mean": 12.6,
+        "bottom_mean": 10.8,
         "delta": 1.8
       },
       {
@@ -336,40 +348,28 @@
         "delta": 1.6
       },
       {
-        "feature": "jd_skill_match_count",
-        "top_mean": 2.4,
-        "bottom_mean": 0.8,
-        "delta": 1.6
-      },
-      {
         "feature": "ai_skill_count",
         "top_mean": 2.4,
         "bottom_mean": 0.8,
         "delta": 1.6
       },
       {
-        "feature": "n_named_jd_skills",
-        "top_mean": 2.4,
-        "bottom_mean": 0.8,
-        "delta": 1.6
+        "feature": "engagement_intensity",
+        "top_mean": 12.6509,
+        "bottom_mean": 11.6837,
+        "delta": 0.9671
       },
       {
         "feature": "n_senior_roles",
         "top_mean": 1.1,
-        "bottom_mean": 0.0,
-        "delta": 1.1
+        "bottom_mean": 0.2,
+        "delta": 0.9
       },
       {
         "feature": "n_ai_skill_advanced",
         "top_mean": 1.4,
-        "bottom_mean": 0.3,
-        "delta": 1.1
-      },
-      {
-        "feature": "engagement_intensity",
-        "top_mean": 12.6509,
-        "bottom_mean": 11.7333,
-        "delta": 0.9176
+        "bottom_mean": 0.5,
+        "delta": 0.9
       },
       {
         "feature": "jd_skill_match_expert_count",
@@ -380,8 +380,8 @@
     ]
   },
   "composite": {
-    "score_0_100": 85.55,
-    "score_0_1": 0.8555,
+    "score_0_100": 85.65,
+    "score_0_1": 0.8565,
     "grade": "B",
     "weights": {
       "ranking_score": 0.4,
@@ -390,14 +390,14 @@
       "audit_score": 0.1
     },
     "sub_scores": {
-      "ranking_score": 0.7713,
-      "reasoning_score": 0.9233,
+      "ranking_score": 0.7701,
+      "reasoning_score": 0.9283,
       "system_score": 0.9,
       "audit_score": 0.9
     },
     "sub_scores_weighted": {
-      "ranking_score": 0.3085,
-      "reasoning_score": 0.277,
+      "ranking_score": 0.308,
+      "reasoning_score": 0.2785,
       "system_score": 0.18,
       "audit_score": 0.09
     }

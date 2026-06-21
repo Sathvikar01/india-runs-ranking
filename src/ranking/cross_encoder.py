@@ -27,7 +27,14 @@ STRONG_MODEL = "BAAI/bge-reranker-base"
 
 
 def _resolve_model_name(model_name: str | None) -> str:
-    """Return the model name to load, falling back if the artifact is missing."""
+    """Return the model name to load, falling back if the artifact is missing.
+
+    A model name is treated as a local path if it exists on disk.
+    Otherwise we fall back to the ms-marco-MiniLM default. The previous
+    version warned but returned the original name, which made the
+    ranker try to download a 570 MB model from HuggingFace at rank
+    time (impossible in the offline sandbox).
+    """
     if model_name and Path(model_name).exists():
         return model_name
     if model_name and model_name != FALLBACK_MODEL:
@@ -35,6 +42,7 @@ def _resolve_model_name(model_name: str | None) -> str:
             "Configured CE model %s not on disk; falling back to %s",
             model_name, FALLBACK_MODEL,
         )
+        return FALLBACK_MODEL
     return model_name or FALLBACK_MODEL
 
 
